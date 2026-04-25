@@ -49,6 +49,8 @@ from graph.queries import (
 from hermes.engine import HermesEngine
 from learning.critic import CriticEngine
 from satellite.local import get_flooded_sectors
+from satellite.flood_engine import CDSEUnavailableError, get_flooded_sectors_live
+import config as _cfg
 from swarm.agents import AgentState
 from swarm.simulation import (
     Simulation,
@@ -87,6 +89,12 @@ _runs: dict[str, dict] = {}
 
 class RunRequest(BaseModel):
     scenario: str = "paiporta"
+
+
+class SatelliteRefreshRequest(BaseModel):
+    date: str = "2024-10-30"
+    flood_event_id: str = "live_refresh"
+    threshold_db: float = -18.0
 
 
 # ── Core orchestration ─────────────────────────────────────────────────────────
@@ -285,3 +293,55 @@ def get_run_result(run_id: str) -> dict:
     if state["status"] != "complete":
         raise HTTPException(status_code=409, detail=f"Run status is '{state['status']}', not 'complete'")
     return state["payload"]
+
+
+@app.post("/satellite/refresh")
+async def satellite_refresh(body: SatelliteRefreshRequest) -> dict:
+    """
+    Fetch a live Sentinel-1 flood mask from CDSE and inject it into the graph.
+
+    Falls back to the pre-loaded EMS flood data if CDSE credentials are missing
+    or the Process API is unavailable — the demo always works.
+
+    Returns:
+        {"status": "live"|"fallback", "source": str, "polygons_detected": int, "edges_blocked": int}
+    """
+    loop = asyncio.get_running_loop()
+
+    def _run() -> dict:
+        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        try:
+            source_label = "live"
+            try:
+                polygons = get_flooded_sectors_live(
+                    bbox=_cfg.VALENCIA_BBOX,
+                    target_date=body.date,
+                    client_id=_cfg.CDSE_CLIENT_ID,
+                    client_secret=_cfg.CDSE_CLIENT_SECRET,
+                    threshold_db=body.threshold_db,
+                )
+            except CDSEUnavailableError as exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "CDSE unavailable (%s) — falling back to local EMS data", exc
+                )
+                polygons = get_flooded_sectors(source="local")
+                source_label = "fallback"
+
+            reset_flood(body.flood_event_id, driver)
+
+            total_edges = 0
+            for polygon in polygons:
+                total_edges += inject_flood(polygon, body.flood_event_id, driver)
+
+            return {
+                "status":            source_label,
+                "source":            "sentinel-1-cdse" if source_label == "live" else "copernicus-ems-local",
+                "date":              body.date,
+                "polygons_detected": len(polygons),
+                "edges_blocked":     total_edges,
+            }
+        finally:
+            driver.close()
+
+    return await loop.run_in_executor(None, _run)

@@ -28,6 +28,12 @@ ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MAIN_MODEL: str = "claude-3-5-sonnet-20240620"  # or claude-sonnet-4-6
 ANTHROPIC_FAST_MODEL: str = "claude-haiku-4-5-20251001"   # clarity validator
 
+# ── Satellite / CDSE (Phase 2) ───────────────────────────────────────────────
+CDSE_CLIENT_ID:     str = os.getenv("CDSE_CLIENT_ID",     "")
+CDSE_CLIENT_SECRET: str = os.getenv("CDSE_CLIENT_SECRET", "")
+# Valencia/Paiporta district bbox — (min_lon, min_lat, max_lon, max_lat) WGS-84
+VALENCIA_BBOX: tuple[float, float, float, float] = (-0.4197, 39.4165, -0.3891, 39.4372)
+
 # ── Hermes Engine Limits ──────────────────────────────────────────────────────
 HERMES_MAX_RETRIES: int = 3
 HERMES_CLARITY_PASS_THRESHOLD: int = 7

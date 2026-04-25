@@ -29,6 +29,8 @@ dependencies = [
     "loguru>=0.7.2",
     # Numerical (MiroFish decay curves, agent positions)
     "numpy>=1.26.4",
+    # PNG parsing for SAR flood mask (Phase 2 satellite pipeline — avoids GDAL)
+    "Pillow>=10.0.0",
     # In-memory spatial graph for MiroFish (synced from Neo4j per simulation run)
     "networkx>=3.3",
     # Terminal output during demo

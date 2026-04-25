@@ -21,6 +21,8 @@ from typing import Union
 
 from shapely.geometry import MultiPolygon, Polygon, shape
 
+import config
+
 logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -30,6 +32,10 @@ _FLOOD_FILE = _PROJECT_ROOT / "data" / "valencia_flood_peak.json"
 def get_flooded_sectors(
     source: str = "local",
     path: str | Path | None = None,
+    *,
+    bbox: tuple[float, float, float, float] | None = None,
+    target_date: str | None = None,
+    threshold_db: float = -18.0,
 ) -> list[Union[Polygon, MultiPolygon]]:
     """
     Return Shapely geometries for currently flooded areas.
@@ -38,21 +44,33 @@ def get_flooded_sectors(
     Coordinates are WGS-84 (lon, lat) — Shapely's (x, y) convention.
 
     Args:
-        source: 'local'  — load Copernicus EMS EMSR773 vectors from disk.
-                'live'   — Phase-2 placeholder; raises until cdse.py is implemented.
+        source:      'local' — load Copernicus EMS EMSR773 vectors from disk.
+                     'live'  — Phase-2 CDSE live pipeline (requires CDSE_CLIENT_ID/SECRET).
+        path:        Override the default EMS file path (local source only).
+        bbox:        AOI for live source, defaults to VALENCIA_BBOX from config.
+        target_date: ISO date for live source, defaults to "2024-10-30".
 
     Returns:
-        List of Shapely Polygon / MultiPolygon objects (1 117 features at flood peak).
+        List of Shapely Polygon / MultiPolygon objects.
 
     Raises:
-        NotImplementedError: if source != 'local'.
-        FileNotFoundError:   if the EMS data file is missing from /data.
+        CDSEUnavailableError: if source='live' and credentials are missing or API fails.
+        FileNotFoundError:    if source='local' and the EMS data file is missing.
     """
-    if source != "local":
-        raise NotImplementedError(
-            "source='live' is the Phase-2 CDSE integration. "
-            "Implement src/satellite/cdse.py once credentials are confirmed."
+    if source == "live":
+        from satellite.flood_engine import CDSEUnavailableError, get_flooded_sectors_live
+        effective_bbox = bbox or config.VALENCIA_BBOX
+        effective_date = target_date or "2024-10-30"
+        return get_flooded_sectors_live(
+            bbox=effective_bbox,
+            target_date=effective_date,
+            client_id=config.CDSE_CLIENT_ID,
+            client_secret=config.CDSE_CLIENT_SECRET,
+            threshold_db=threshold_db,
         )
+
+    if source != "local":
+        raise ValueError(f"Unknown source {source!r}. Use 'local' or 'live'.")
 
     if path is not None:
         flood_file = Path(path)

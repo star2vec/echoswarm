@@ -2,148 +2,140 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ECHO-SWARM WebSocket Test</title>
+<title>ECHO-SWARM · Live Mission Control</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d1117; color: #e6edf3; font-family: 'Courier New', monospace; padding: 24px; }
-  h1 { font-size: 1.2rem; color: #58a6ff; margin-bottom: 20px; letter-spacing: 0.05em; }
+  body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; }
+  h1 { font-size: 1.4rem; color: #58a6ff; margin-bottom: 20px; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; }
 
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
-  .card h2 { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: border-color 0.6s ease; }
+  .card.archived { border-color: #388bfd; }
+  .card h2 { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.1em;
+             margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 8px; }
 
-  .stat { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 0.85rem; }
-  .stat .label { color: #8b949e; }
-  .stat .value { font-weight: bold; font-size: 1rem; }
+  .stat { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .stat .label { color: #8b949e; font-size: 0.85rem; }
+  .stat .value { font-weight: bold; font-family: 'Courier New', monospace; font-size: 1.1rem; transition: color 0.4s ease; }
   .value.green  { color: #3fb950; }
   .value.red    { color: #f85149; }
   .value.yellow { color: #d29922; }
   .value.blue   { color: #58a6ff; }
 
-  .progress-bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
-  .progress-fill { height: 100%; background: #58a6ff; border-radius: 3px; transition: width 0.3s ease; width: 0%; }
+  .progress-bar { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; margin: 10px 0 20px 0; }
+  .progress-fill { height: 100%; background: #58a6ff; width: 0%; transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+  .progress-fill.done { background: #3fb950; }
 
   .log { background: #010409; border: 1px solid #30363d; border-radius: 8px; padding: 12px;
-         height: 200px; overflow-y: auto; font-size: 0.78rem; line-height: 1.6; }
-  .log .ts    { color: #8b949e; }
-  .log .tick  { color: #58a6ff; }
-  .log .ok    { color: #3fb950; }
-  .log .err   { color: #f85149; }
-  .log .dim   { color: #484f58; }
+         height: 250px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.8rem; line-height: 1.6; }
+  .log .ts     { color: #484f58; }
+  .log .tick   { color: #58a6ff; }
+  .log .ok     { color: #3fb950; font-weight: bold; }
+  .log .err    { color: #f85149; }
+  .log .info   { color: #8b949e; }
+  .log .header { color: #8b949e; border-bottom: 1px solid #21262d; margin-bottom: 5px; }
 
-  .sop-box { background: #010409; border: 1px solid #388bfd; border-radius: 8px; padding: 14px;
-             font-size: 0.82rem; line-height: 1.7; white-space: pre-wrap; color: #cdd9e5;
-             display: none; margin-top: 16px; }
-  .sop-box h2 { color: #388bfd; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px; }
+  .sop-box { background: #0d1117; border: 1px solid #388bfd; border-radius: 8px; padding: 20px;
+             margin-top: 16px; display: none; opacity: 0; transform: translateY(10px);
+             transition: opacity 0.5s ease, transform 0.5s ease; }
+  .sop-box.visible { display: block; opacity: 1; transform: translateY(0); }
+  .sop-content { font-size: 0.9rem; line-height: 1.6; color: #cdd9e5; }
+  .sop-content h1, .sop-content h2, .sop-content h3 { color: #58a6ff; margin: 15px 0 10px 0; font-size: 1.1rem; }
+  .sop-content ul { margin-left: 20px; margin-bottom: 10px; }
+  .sop-content strong { color: #f2cc60; }
 
-  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #484f58; margin-right: 8px; }
-  .status-dot.connecting { background: #d29922; animation: pulse 1s infinite; }
-  .status-dot.live       { background: #3fb950; animation: pulse 0.8s infinite; }
-  .status-dot.done       { background: #58a6ff; animation: none; }
-  .status-dot.error      { background: #f85149; animation: none; }
-  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #484f58; margin-right: 8px; }
+  .status-dot.live    { background: #3fb950; box-shadow: 0 0 8px #238636; animation: pulse 1.5s infinite; }
+  .status-dot.done    { background: #58a6ff; }
+  .status-dot.error   { background: #f85149; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-  button { background: #238636; border: 1px solid #2ea043; color: #fff; padding: 8px 20px;
-           border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 0.85rem; margin-right: 8px; }
-  button:hover { background: #2ea043; }
-  button.secondary { background: #21262d; border-color: #30363d; }
-  button.secondary:hover { background: #30363d; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button { background: #238636; border: 1px solid #2ea043; color: #fff; padding: 10px 24px;
+           border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+  button:hover { background: #2ea043; transform: translateY(-1px); }
+  button:disabled { background: #21262d; border-color: #30363d; opacity: 0.6; cursor: not-allowed; transform: none; }
 
-  #controls { margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-  #status-label { font-size: 0.82rem; color: #8b949e; }
+  #controls { margin-bottom: 24px; background: #161b22; padding: 15px; border-radius: 8px;
+              border: 1px solid #30363d; display: flex; align-items: center; gap: 15px; }
 </style>
 </head>
 <body>
 
-<h1>⚡ ECHO-SWARM · WebSocket Stream Test</h1>
+<h1><span>⚡</span> ECHO-SWARM · WebSocket Mission Control</h1>
 
 <div id="controls">
-  <button id="btn-connect" onclick="connect()">▶ Run Simulation</button>
-  <button class="secondary" id="btn-disconnect" onclick="disconnect()" disabled>■ Disconnect</button>
+  <button id="btn-run" onclick="runSimulation()">▶ Launch Simulation</button>
   <span class="status-dot" id="dot"></span>
-  <span id="status-label">Idle — click Run to start</span>
+  <span id="status-label" style="color: #8b949e;">System Ready</span>
 </div>
 
 <div class="grid">
-  <div class="card">
-    <h2>Live Simulation Progress</h2>
+  <div class="card" id="card-telemetry">
+    <h2>Live Fleet Telemetry</h2>
     <div class="stat">
-      <span class="label">Tick</span>
-      <span class="value blue" id="tick">—</span>
+      <span class="label">Current Tick</span>
+      <span class="value blue" id="tick">0</span>
     </div>
     <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-    <div class="stat" style="margin-top:12px">
-      <span class="label">Safe (evacuated)</span>
-      <span class="value green" id="safe">—</span>
+
+    <div class="stat">
+      <span class="label">Safe / Evacuated</span>
+      <span class="value green" id="safe">0</span>
     </div>
     <div class="stat">
-      <span class="label">Evacuating</span>
-      <span class="value yellow" id="evacuating">—</span>
+      <span class="label">Actively Evacuating</span>
+      <span class="value yellow" id="evacuating">0</span>
     </div>
     <div class="stat">
-      <span class="label">Informed (undecided)</span>
-      <span class="value" id="informed">—</span>
+      <span class="label">Cognitive Awareness (Informed)</span>
+      <span class="value" id="informed">0</span>
     </div>
     <div class="stat">
-      <span class="label">Waiting (unreached)</span>
-      <span class="value" id="waiting">—</span>
-    </div>
-    <div class="stat">
-      <span class="label">Token preservation</span>
-      <span class="value" id="preservation">—</span>
+      <span class="label">Information Preservation</span>
+      <span class="value blue" id="preservation">0%</span>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Final Results</h2>
+  <div class="card" id="card-analysis">
+    <h2>Post-Action Analysis</h2>
     <div class="stat">
-      <span class="label">Evacuation rate</span>
+      <span class="label">Final Evacuation Rate</span>
       <span class="value green" id="evac-rate">—</span>
     </div>
     <div class="stat">
-      <span class="label">Stranded</span>
+      <span class="label">Stranded Agents</span>
       <span class="value red" id="stranded">—</span>
     </div>
     <div class="stat">
-      <span class="label">Ticks run</span>
-      <span class="value" id="ticks-run">—</span>
-    </div>
-    <div class="stat">
-      <span class="label">Hermes clarity score</span>
+      <span class="label">Hermes Clarity Score</span>
       <span class="value blue" id="clarity">—</span>
     </div>
     <div class="stat">
-      <span class="label">Critic diagnosis</span>
-      <span class="value yellow" id="diagnosis" style="font-size:0.75rem;text-align:right;max-width:200px">—</span>
-    </div>
-    <div class="stat">
-      <span class="label">Run ID</span>
-      <span class="value dim" id="run-id" style="color:#8b949e;font-size:0.78rem">—</span>
+      <span class="label">Critic Diagnosis</span>
+      <span class="value yellow" id="diagnosis" style="font-size:0.8rem; text-align: right; max-width: 60%;">—</span>
     </div>
   </div>
 </div>
 
 <div class="card">
-  <h2>Message Log</h2>
+  <h2>Raw Data Stream</h2>
   <div class="log" id="log"></div>
 </div>
 
 <div class="sop-box" id="sop-box">
-  <h2>Critic SOP Update</h2>
-  <div id="sop-text"></div>
+  <h2 style="color: #58a6ff; border-bottom: 1px solid #388bfd; margin-bottom: 15px;">📡 Autonomous SOP Re-Calibration</h2>
+  <div id="sop-text" class="sop-content"></div>
 </div>
 
 <script>
 const WS_URL = 'ws://localhost:8000/ws/run?scenario=paiporta';
-const MAX_TICKS = 50;
 let ws = null;
 
-function setStatus(state, text) {
-  const dot = document.getElementById('dot');
-  dot.className = 'status-dot ' + state;
-  document.getElementById('status-label').textContent = text;
-}
+// Persistent state — survives WebSocket close events.
+// Only reset when the user explicitly starts a new run.
+let simCompleted = false;
 
 function log(msg, cls = '') {
   const el = document.getElementById('log');
@@ -152,96 +144,114 @@ function log(msg, cls = '') {
   el.scrollTop = el.scrollHeight;
 }
 
-function set(id, val) { document.getElementById(id).textContent = val; }
+function runSimulation() {
+  // ── Reset — only here, never in onclose ──────────────────────────────────
+  simCompleted = false;
 
-function connect() {
-  document.getElementById('btn-connect').disabled = true;
-  document.getElementById('btn-disconnect').disabled = false;
-  setStatus('connecting', 'Connecting…');
-  log('Connecting to ' + WS_URL, 'dim');
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('progress').style.width = '0%';
+  document.getElementById('progress').classList.remove('done');
+  document.getElementById('log').innerHTML = '<div class="header">Initializing connection to ECHO-SWARM core...</div>';
+  document.getElementById('card-telemetry').classList.remove('archived');
+  document.getElementById('card-analysis').classList.remove('archived');
 
+  // Clear post-action fields so stale data from a prior run isn't visible
+  ['evac-rate', 'stranded', 'clarity', 'diagnosis'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+
+  // Hide SOP box without animation (it's a new run)
+  const sopBox = document.getElementById('sop-box');
+  sopBox.classList.remove('visible');
+  sopBox.style.display = 'none';
+
+  const dot   = document.getElementById('dot');
+  const label = document.getElementById('status-label');
+  dot.className      = 'status-dot live';
+  label.style.color  = '';
+  label.textContent  = 'Executing Simulation...';
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
   ws = new WebSocket(WS_URL);
-
-  ws.onopen = () => {
-    setStatus('live', 'Live — simulation running');
-    log('Connected ✓  waiting for first tick…', 'ok');
-  };
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
     if (msg.type === 'tick') {
       const d = msg.data;
-      set('tick', d.tick);
-      set('safe', d.n_safe);
-      set('evacuating', d.n_evacuating);
-      set('informed', d.n_informed);
-      set('waiting', d.n_waiting);
-      set('preservation', (d.preservation_rate * 100).toFixed(1) + '%');
-      document.getElementById('progress').style.width =
-        Math.min(100, (d.tick / MAX_TICKS) * 100) + '%';
+      document.getElementById('tick').textContent        = d.tick;
+      document.getElementById('safe').textContent        = d.n_safe;
+      document.getElementById('evacuating').textContent  = d.n_evacuating;
+      document.getElementById('informed').textContent    = d.n_informed;
+      document.getElementById('preservation').textContent = (d.preservation_rate * 100).toFixed(1) + '%';
+      // Cap live progress at 90% so the final jump to 100% on complete is visible
+      document.getElementById('progress').style.width   = Math.min(d.tick / 10 * 100, 90) + '%';
 
-      log(`tick ${String(d.tick).padStart(2)} · safe <b>${d.n_safe}</b> · evacuating ${d.n_evacuating} · waiting ${d.n_waiting} · pres ${(d.preservation_rate*100).toFixed(0)}%`, 'tick');
+      log(`Tick ${d.tick}: Fleet status updated. Evacuating: ${d.n_evacuating}`, 'tick');
     }
 
     else if (msg.type === 'complete') {
       const p = msg.data;
-      setStatus('done', 'Complete ✓');
-      set('evac-rate', (p.summary.evacuation_rate * 100).toFixed(1) + '%');
-      set('stranded', p.summary.stranded);
-      set('ticks-run', p.summary.ticks_run);
-      set('clarity', p.hermes.clarity.overall + '/10');
-      set('diagnosis', p.critic.diagnosis);
-      set('run-id', p.meta.run_id);
-      document.getElementById('progress').style.width = '100%';
 
-      const sop = document.getElementById('sop-box');
-      document.getElementById('sop-text').textContent = p.critic.sop_update;
-      sop.style.display = 'block';
+      // 1. Persist completion flag BEFORE anything else — onclose reads this.
+      simCompleted = true;
 
-      log('─── COMPLETE ───', 'ok');
-      log(`Evacuation rate: ${(p.summary.evacuation_rate*100).toFixed(1)}%  |  Stranded: ${p.summary.stranded}  |  Ticks: ${p.summary.ticks_run}`, 'ok');
-      log(`Hermes clarity: ${p.hermes.clarity.overall}/10  (model: ${p.hermes.model})`, 'ok');
-      log(`Critic: ${p.critic.diagnosis}`, 'ok');
-      log(`map.agents_final count: ${p.map.agents_final.length}`, 'dim');
-      log(`map.bottleneck_roads: ${p.map.bottleneck_roads.map(r => r.name).join(', ')}`, 'dim');
-      log(`map.flooded_roads: ${p.map.flooded_roads.length} roads with coords`, 'dim');
+      // 2. Immediate log feedback so the user sees activity
+      log('✔️ Simulation Cycle Complete. Archiving results...', 'ok');
+      log(`Detected ${p.map.bottleneck_roads.length} major bottlenecks.`, 'err');
 
+      // 3. Initiate close — onclose fires async, typically within ~50ms
       ws.close();
-      document.getElementById('btn-connect').disabled = false;
-      document.getElementById('btn-disconnect').disabled = true;
+
+      // 4. 500ms visual transition: gives the user's eyes time to shift from
+      //    "Live" mode to "Analysis" mode before the final numbers appear.
+      setTimeout(() => {
+        document.getElementById('evac-rate').textContent  = (p.summary.evacuation_rate * 100).toFixed(1) + '%';
+        document.getElementById('stranded').textContent   = p.summary.stranded;
+        document.getElementById('clarity').textContent    = p.hermes.clarity.overall + '/10';
+        document.getElementById('diagnosis').textContent  = p.critic.diagnosis;
+
+        document.getElementById('progress').style.width = '100%';
+        document.getElementById('progress').classList.add('done');
+
+        document.getElementById('card-telemetry').classList.add('archived');
+        document.getElementById('card-analysis').classList.add('archived');
+
+        // Render Markdown SOP via marked.js
+        document.getElementById('sop-text').innerHTML = marked.parse(p.critic.sop_update || '');
+        // Trigger CSS transition: set display first, then add class on next frame
+        sopBox.style.display = 'block';
+        requestAnimationFrame(() => sopBox.classList.add('visible'));
+
+        log('📦 Final results locked. Data preserved until next launch.', 'info');
+      }, 500);
     }
 
     else if (msg.type === 'error') {
-      setStatus('error', 'Error');
-      log('ERROR: ' + msg.message, 'err');
-      document.getElementById('btn-connect').disabled = false;
-      document.getElementById('btn-disconnect').disabled = true;
+      log(`Server error: ${msg.message}`, 'err');
     }
   };
 
-  ws.onerror = (e) => {
-    setStatus('error', 'Connection error');
-    log('WebSocket error — is the server running on port 8000?', 'err');
-    document.getElementById('btn-connect').disabled = false;
-    document.getElementById('btn-disconnect').disabled = true;
-  };
-
+  // ── Smart close: blue "Archived" if completed, red if unexpected ──────────
   ws.onclose = () => {
-    if (document.getElementById('dot').className.includes('live')) {
-      setStatus('error', 'Connection closed unexpectedly');
-      log('Connection closed', 'err');
-      document.getElementById('btn-connect').disabled = false;
-      document.getElementById('btn-disconnect').disabled = true;
+    document.getElementById('btn-run').disabled = false;
+
+    if (simCompleted) {
+      dot.className     = 'status-dot done';
+      label.style.color = '#58a6ff';
+      label.textContent = '📦 Simulation Archived';
+    } else {
+      dot.className     = 'status-dot error';
+      label.style.color = '#f85149';
+      label.textContent = 'Connection Closed';
+      log('WebSocket closed before simulation completed.', 'err');
     }
   };
-}
 
-function disconnect() {
-  if (ws) ws.close();
-  setStatus('', 'Disconnected');
-  document.getElementById('btn-connect').disabled = false;
-  document.getElementById('btn-disconnect').disabled = true;
+  // onerror is always followed by onclose — button re-enable handled there
+  ws.onerror = () => {
+    log('CRITICAL ERROR: Could not establish WebSocket tunnel.', 'err');
+  };
 }
 </script>
 </body>
