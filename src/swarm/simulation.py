@@ -3,7 +3,8 @@ from __future__ import annotations
 import random
 import uuid
 from collections import Counter
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 
 import networkx as nx
 from loguru import logger
@@ -203,7 +204,9 @@ class SimulationResult:
     never_informed: int          # WAITING at termination
     decay_curve: list[float]     # preservation_rate per tick
     bottleneck_edges: list[str]  # top-5 road names by cumulative agent crossings
+    bottleneck_counts: list[int]  # crossing counts parallel to bottleneck_edges
     ticks_run: int
+    tick_history: list[dict] = field(default_factory=list)  # per-tick metrics for API streaming
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +222,7 @@ class Simulation:
         key_tokens: frozenset[str],
         shelter_node: str,
         config: SimulationConfig | None = None,
+        tick_callback: Callable[[dict], None] | None = None,
     ) -> None:
         self._G = G_passable
         self._G_full = G_full
@@ -226,6 +230,7 @@ class Simulation:
         self._key_tokens = key_tokens
         self._shelter_node = shelter_node
         self._config = config or SimulationConfig()
+        self._tick_callback = tick_callback
         self._tick_log: list[TickResult] = []
         self._edge_usage: Counter[str] = Counter()
 
@@ -280,6 +285,8 @@ class Simulation:
         self._spread_panic()
         result = self._compute_tick_metrics()
         self._tick_log.append(result)
+        if self._tick_callback is not None:
+            self._tick_callback(asdict(result))
         return result
 
     def run(self) -> SimulationResult:
@@ -459,6 +466,7 @@ class Simulation:
         informed_never_acted = sum(1 for a in self._agents if a.state == AgentState.INFORMED)
         never_informed = sum(1 for a in self._agents if a.state == AgentState.WAITING)
 
+        top_bottlenecks = self._edge_usage.most_common(5)
         return SimulationResult(
             run_id=str(uuid.uuid4())[:8],
             total_agents=total,
@@ -467,6 +475,8 @@ class Simulation:
             informed_never_acted=informed_never_acted,
             never_informed=never_informed,
             decay_curve=[r.preservation_rate for r in self._tick_log],
-            bottleneck_edges=[road for road, _ in self._edge_usage.most_common(5)],
+            bottleneck_edges=[road for road, _ in top_bottlenecks],
+            bottleneck_counts=[count for _, count in top_bottlenecks],
             ticks_run=len(self._tick_log),
+            tick_history=[asdict(r) for r in self._tick_log],
         )

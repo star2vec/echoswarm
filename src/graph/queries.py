@@ -621,6 +621,89 @@ def get_graph_context(sector: str, driver: Driver) -> dict:
     }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# get_node_coords / get_road_geometry  (Phase 6 — API bridge helpers)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_node_coords(node_ids: list[str], driver: Driver) -> dict[str, tuple[float, float]]:
+    """Return {node_id: (lat, lon)} for a batch of Intersection node IDs."""
+    if not node_ids:
+        return {}
+    with driver.session() as session:
+        result = session.run(
+            "MATCH (i:Intersection) WHERE i.id IN $ids "
+            "RETURN i.id AS id, i.lat AS lat, i.lon AS lon",
+            ids=node_ids,
+        )
+        return {r["id"]: (r["lat"], r["lon"]) for r in result}
+
+
+def get_road_geometry(
+    road_names: list[str],
+    road_ids: list[str],
+    driver: Driver,
+) -> dict:
+    """
+    Return coordinates for visualising bottleneck and flooded roads.
+
+    Road nodes have no geometry; coords are derived from CONNECTS segment
+    endpoints (Intersection lat/lon).  Each road may span many segments, so
+    all distinct endpoint coordinates are collected and deduplicated.
+
+    Returns:
+        {
+            "by_name": {road_name: [[lat, lon], ...]},
+            "by_id":   {road_id:   {"name": str, "coords": [[lat, lon], ...]}}
+        }
+    """
+    by_name: dict[str, list[list[float]]] = {}
+    by_id: dict[str, dict] = {}
+
+    if road_names:
+        with driver.session() as session:
+            result = session.run(
+                """
+                MATCH (a:Intersection)-[c:CONNECTS]->(b:Intersection)
+                WHERE c.road_name IN $road_names
+                RETURN c.road_name AS name,
+                       a.lat AS a_lat, a.lon AS a_lon,
+                       b.lat AS b_lat, b.lon AS b_lon
+                """,
+                road_names=road_names,
+            )
+            for r in result:
+                name = r["name"] or "unknown"
+                pts = by_name.setdefault(name, [])
+                for pt in ([r["a_lat"], r["a_lon"]], [r["b_lat"], r["b_lon"]]):
+                    if pt not in pts:
+                        pts.append(pt)
+
+    if road_ids:
+        with driver.session() as session:
+            result = session.run(
+                """
+                MATCH (a:Intersection)-[c:CONNECTS]->(b:Intersection)
+                WHERE c.road_id IN $road_ids AND c.passable = false
+                RETURN c.road_id AS id, c.road_name AS name,
+                       a.lat AS a_lat, a.lon AS a_lon,
+                       b.lat AS b_lat, b.lon AS b_lon
+                """,
+                road_ids=road_ids,
+            )
+            for r in result:
+                rid = r["id"]
+                entry = by_id.setdefault(rid, {"name": r["name"], "coords": []})
+                for pt in ([r["a_lat"], r["a_lon"]], [r["b_lat"], r["b_lon"]]):
+                    if pt not in entry["coords"]:
+                        entry["coords"].append(pt)
+
+    logger.info(
+        "get_road_geometry: {} bottleneck roads, {} flooded roads",
+        len(by_name), len(by_id),
+    )
+    return {"by_name": by_name, "by_id": by_id}
+
+
 def _truncate_road_list(roads: list[dict], max_roads: int) -> list[dict]:
     """Deduplicate by name, sort named roads first, cap at max_roads."""
     seen: set[str] = set()

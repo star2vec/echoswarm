@@ -5,9 +5,9 @@ Analyses a completed MiroFish simulation against the original Hermes message
 and produces an SOP Update — a Markdown snippet that HermesEngine prepends to
 its system prompt on the next run.
 
-Persists two artefacts:
-  sops/latest_feedback.md        — running append-log of every SOP produced
-  sops/{scenario}_v{n}.md        — versioned file auto-loaded by HermesEngine
+Persists two artefacts per scenario:
+  sops/{scenario}.md         — overwritten each run; latest rules only
+  sops/{scenario}_history.md — append-only diary of every diagnosis
 
 Usage:
     from dataclasses import asdict
@@ -22,7 +22,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,7 +35,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 _SOPS_DIR = Path(__file__).resolve().parent.parent.parent / "sops"
-_LATEST_FEEDBACK = _SOPS_DIR / "latest_feedback.md"
 
 _CRITIC_SYSTEM_PROMPT = """\
 You are Hermes-Critic, an after-action analyst for emergency evacuation systems.
@@ -95,7 +93,7 @@ class CriticEngine:
 
     Args:
         provider:     "groq" or "anthropic". Defaults to config.LLM_PROVIDER.
-        sop_scenario: Prefix used for versioned SOP files (default "valencia").
+        sop_scenario: Scenario name used to name sop files (default "valencia").
     """
 
     def __init__(
@@ -122,8 +120,8 @@ class CriticEngine:
         Diagnose simulation failures and return an SOP Update Markdown snippet.
 
         The snippet is also:
-        - Written to sops/{scenario}_v{n}.md (picked up by HermesEngine next run)
-        - Appended to sops/latest_feedback.md (running history)
+        - Overwritten to sops/{scenario}.md (picked up by HermesEngine next run)
+        - Appended to sops/{scenario}_history.md (scenario-specific diary)
 
         Args:
             hermes_message: The human_readable field from the Hermes evacuation message.
@@ -177,31 +175,22 @@ class CriticEngine:
             bottleneck_edges=", ".join(bottleneck_edges) if bottleneck_edges else "none recorded",
         )
 
-    def _next_version(self) -> int:
-        """Return the next integer version for this scenario's SOP files."""
-        existing = sorted(_SOPS_DIR.glob(f"{self._scenario}_v*.md"))
-        if not existing:
-            return 1
-        match = re.search(r"_v(\d+)$", existing[-1].stem)
-        return int(match.group(1)) + 1 if match else 1
-
     def _persist(self, sop_update: str, sim_result: dict) -> None:
-        """Write versioned SOP file and append an entry to latest_feedback.md."""
-        version = self._next_version()
-        versioned_path = _SOPS_DIR / f"{self._scenario}_v{version}.md"
-        versioned_path.write_text(sop_update, encoding="utf-8")
-        logger.info("SOP v%d written → %s", version, versioned_path.name)
+        """Overwrite the scenario playbook and append a full entry to the history log."""
+        playbook = _SOPS_DIR / f"{self._scenario}.md"
+        playbook.write_text(sop_update, encoding="utf-8")
+        logger.info("Playbook overwritten → %s", playbook.name)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         run_id = sim_result.get("run_id", "unknown")
         evac_rate = sim_result.get("evacuation_rate", 0.0)
 
-        entry = (
-            f"\n---\n"
-            f"<!-- run: {run_id} | ts: {timestamp} | "
-            f"evac_rate: {evac_rate:.1%} | sop: {versioned_path.name} -->\n\n"
+        history_entry = (
+            f"\n---\n\n"
+            f"**Run:** {run_id} · **{timestamp}** · Evac rate: {evac_rate:.1%}\n\n"
             f"{sop_update}\n"
         )
-        with _LATEST_FEEDBACK.open("a", encoding="utf-8") as fh:
-            fh.write(entry)
-        logger.info("Appended to %s", _LATEST_FEEDBACK.name)
+        history = _SOPS_DIR / f"{self._scenario}_history.md"
+        with history.open("a", encoding="utf-8") as fh:
+            fh.write(history_entry)
+        logger.info("Appended to %s", history.name)

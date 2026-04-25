@@ -241,17 +241,15 @@ _RETRY_NOTE_TEMPLATE = (
 
 def _load_latest_sop(scenario: str) -> str:
     """
-    Prepend the most recent SOP modifier to the system prompt.
-    Returns empty string if no SOPs exist yet (Phase 3 default).
-    SOPs are written by the Learning Loop in Phase 5 to sops/{scenario}_v*.md.
+    Prepend the current SOP playbook to the system prompt.
+    Returns empty string if no playbook exists yet (Phase 3 default).
+    The playbook is written (overwritten) by CriticEngine to sops/{scenario}.md.
     """
-    if not _SOPS_DIR.exists():
+    playbook = _SOPS_DIR / f"{scenario}.md"
+    if not playbook.exists():
         return ""
-    candidates = sorted(_SOPS_DIR.glob(f"{scenario}_v*.md"))
-    if not candidates:
-        return ""
-    content = candidates[-1].read_text(encoding="utf-8").strip()
-    logger.info("Loaded SOP modifier: %s", candidates[-1].name)
+    content = playbook.read_text(encoding="utf-8").strip()
+    logger.info("Loaded SOP modifier: %s", playbook.name)
     return content
 
 
