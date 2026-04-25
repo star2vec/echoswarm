@@ -132,7 +132,10 @@ class AnthropicClient:
             raise RuntimeError("anthropic package not installed. Run: uv add anthropic") from exc
         if not config.ANTHROPIC_API_KEY:
             raise RuntimeError("ANTHROPIC_API_KEY is not set. Add it to your .env file.")
-        self._client = _anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        self._client = _anthropic.Anthropic(
+            api_key=config.ANTHROPIC_API_KEY,
+            timeout=60.0,   # fail fast instead of hanging for up to 600 s (SDK default)
+        )
         self.model = model
         self._use_cache = use_cache
 

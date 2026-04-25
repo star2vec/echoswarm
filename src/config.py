@@ -16,7 +16,7 @@ load_dotenv()
 # ── Provider Selection ────────────────────────────────────────────────────────
 # "groq"       → Groq API  (llama-3.1-70b-versatile) — default for dev/simulation
 # "anthropic"  → Anthropic API (claude-sonnet-4-6)   — production swap
-LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq")
+LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "anthropic")
 
 # ── Groq (default: development + simulation) ──────────────────────────────────
 GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
@@ -25,7 +25,7 @@ GROQ_FAST_MODEL: str = "llama-3.1-8b-instant"  # clarity validator
 
 # ── Anthropic (production swap) ───────────────────────────────────────────────
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MAIN_MODEL: str = "claude-3-5-sonnet-20240620"  # or claude-sonnet-4-6
+ANTHROPIC_MAIN_MODEL: str = "claude-haiku-4-5-20251001"
 ANTHROPIC_FAST_MODEL: str = "claude-haiku-4-5-20251001"   # clarity validator
 
 # ── Satellite / CDSE (Phase 2) ───────────────────────────────────────────────

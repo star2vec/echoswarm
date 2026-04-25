@@ -187,3 +187,13 @@
 - **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without requiring external confirmation.
 - **Rule:** Specify the shelter destination as a precise street intersection, including the nearest notable landmark, to minimize route ambiguity and facilitate efficient word-of-mouth transmission.
 - **Rule:** State the evacuation route using both street names and cardinal directions (e.g., "proceed north on Avinguda de la Independència") to enhance clarity and reduce degradation of instructions through multi-hop communication.
+
+---
+
+**Run:** c0606451 · **2026-04-25T23:22:18Z** · Evac rate: 43.0%
+
+## SOP Update — Skeptical Agents Need Self-Verifiable Authority Anchors
+
+- **Rule:** Prepend every evacuation message with a named authority source and timestamp (e.g., "Valencia Regional Emergency Authority, 14:32 UTC") so Skeptical agents can verify credibility without requiring peer confirmation.
+- **Rule:** Replace building names with precise GPS coordinates or street intersections (e.g., "43.41°N, 0.36°W" or "Avenida Paiporta & Carrer de la Pau") and list 2–3 landmark roads to *avoid* by name, so route clarity survives multi-hop word-of-mouth degradation.
+- **Rule:** Include one scannable, self-contained fact that requires no external source to validate (e.g., "Copernicus satellite confirms flooding at CV-407 as of [time]; do not attempt crossing") to allow Skeptical agents to act without waiting for a second neighbor's confirmation.

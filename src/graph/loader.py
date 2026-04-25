@@ -53,9 +53,13 @@ out body;
 out skel qt;
 """
 
-# Kumi Systems mirror — avoids the 406 rejection from overpass-api.de's
-# default rate-limiting policy when no User-Agent is supplied.
-_OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter"
+# Tried in order; skips to next on 404/connection failure so a dead mirror
+# never blocks the pipeline. User-Agent is required by overpass-api.de.
+_OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
 _USER_AGENT = "ECHO-SWARM-Hackathon-Bot/1.0"
 
 # km/h defaults used when OSM maxspeed tag is absent
@@ -183,28 +187,40 @@ def _fetch_overpass(
     api = overpy.Overpass()
     headers = {"User-Agent": _USER_AGENT}
 
-    for attempt in range(max_retries):
-        try:
-            logger.info(
-                "Querying Overpass (attempt %d/%d) bbox=%s …",
-                attempt + 1, max_retries, bbox,
-            )
-            response = requests.post(
-                _OVERPASS_URL,
-                data={"data": query},
-                headers=headers,
-                timeout=90,
-            )
-            response.raise_for_status()
-            return api.parse_json(response.text)
-        except (requests.HTTPError, requests.ConnectionError, overpy.exception.OverPyException) as exc:
-            if attempt < max_retries - 1:
-                wait = 2 ** attempt
-                logger.warning("Overpass error: %s — retrying in %ds", exc, wait)
-                time.sleep(wait)
-            else:
-                raise
-    raise RuntimeError("Overpass query failed after all retries")  # unreachable
+    last_exc: Exception | None = None
+    for url in _OVERPASS_ENDPOINTS:
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    "Querying Overpass %s (attempt %d/%d) bbox=%s …",
+                    url, attempt + 1, max_retries, bbox,
+                )
+                response = requests.post(
+                    url, data={"data": query}, headers=headers, timeout=90,
+                )
+                response.raise_for_status()
+                return api.parse_json(response.text)
+            except requests.HTTPError as exc:
+                last_exc = exc
+                code = exc.response.status_code if exc.response is not None else 0
+                if code in (400, 404):
+                    logger.warning("Overpass %s returned HTTP %d — trying next endpoint", url, code)
+                    break
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning("Overpass %s HTTP %d — retrying in %ds", url, code, wait)
+                    time.sleep(wait)
+            except (requests.ConnectionError, overpy.exception.OverPyException) as exc:
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt
+                    logger.warning("Overpass %s error: %s — retrying in %ds", url, exc, wait)
+                    time.sleep(wait)
+                else:
+                    logger.warning("Overpass %s failed: %s — trying next endpoint", url, exc)
+    raise RuntimeError(
+        f"Overpass query failed on all {len(_OVERPASS_ENDPOINTS)} endpoints. Last: {last_exc}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

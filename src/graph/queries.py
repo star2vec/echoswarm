@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Union
 
 import shapely.geometry
+import shapely.prepared
 from loguru import logger
 from neo4j import Driver
 
@@ -265,14 +266,18 @@ def _nodes_inside(
 
     swap_axes=True tests Point(lat, lon) to detect a lat/lon storage flip.
     """
+    # prep() builds an R-tree index on the geometry once so each subsequent
+    # contains() call is 3–10× faster than calling it on the raw polygon.
+    prepared = shapely.prepared.prep(polygon)
+    check = prepared.contains
     if swap_axes:
         return {
             n["id"] for n in nodes
-            if polygon.contains(shapely.geometry.Point(n["lat"], n["lon"]))
+            if check(shapely.geometry.Point(n["lat"], n["lon"]))
         }
     return {
         n["id"] for n in nodes
-        if polygon.contains(shapely.geometry.Point(n["lon"], n["lat"]))
+        if check(shapely.geometry.Point(n["lon"], n["lat"]))
     }
 
 

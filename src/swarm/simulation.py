@@ -247,19 +247,15 @@ class Simulation:
         )
         self._replay_snapshots: list[list[dict]] = []
 
-        # Pre-compute evacuation routes from every reachable node to the shelter
+        # Pre-compute evacuation routes from every reachable node to the shelter.
+        # Single reverse-Dijkstra pass (target= API) — O((N+E)·log N) total.
+        # The per-node loop it replaced was O(N·(N+E)·log N): 2000–4000× slower
+        # on large bboxes and the direct cause of the "hang at Tick 0" symptom.
         self._routes: dict[str, list[str]] = {}
         if G_passable.has_node(shelter_node):
-            for node in G_passable.nodes():
-                if node == shelter_node:
-                    self._routes[node] = [node]
-                    continue
-                try:
-                    self._routes[node] = nx.shortest_path(
-                        G_passable, node, shelter_node, weight="travel_time_min"
-                    )
-                except nx.NetworkXNoPath:
-                    pass  # unreachable node; agent stays EVACUATING indefinitely
+            self._routes = nx.shortest_path(
+                G_passable, target=shelter_node, weight="travel_time_min"
+            )
 
         # Seed the initial 5% of non-Immobile agents with the full Hermes message
         eligible = [a for a in agents if a.agent_type != AgentType.IMMOBILE]
@@ -302,18 +298,14 @@ class Simulation:
         return result
 
     def run(self) -> SimulationResult:
-        """Run until max_ticks or convergence (no new informed agents)."""
-        prev_informed = sum(1 for a in self._agents if a.state == AgentState.INFORMED)
-
+        """Run until no agents are actively moving or max_ticks is reached."""
         for tick_n in range(1, self._config.max_ticks + 1):
             self.tick()
-            curr_informed = sum(1 for a in self._agents if a.state == AgentState.INFORMED)
-
-            # Early stop after a warm-up period when propagation has stalled
-            if tick_n > 5 and curr_informed <= prev_informed:
-                logger.info("Convergence at tick {}: no new informed agents", tick_n)
+            n_evacuating = sum(1 for a in self._agents if a.state == AgentState.EVACUATING)
+            n_informed   = sum(1 for a in self._agents if a.state == AgentState.INFORMED)
+            if n_evacuating == 0 and n_informed == 0:
+                logger.info("Convergence at tick {}: no active agents remaining", tick_n)
                 break
-            prev_informed = curr_informed
 
         return self._build_result()
 
@@ -342,10 +334,13 @@ class Simulation:
         total = len(self._key_tokens)
         for agent in self._agents:
             if agent.state == AgentState.INFORMED and agent.can_act(total):
-                agent.state = AgentState.EVACUATING
                 if agent.node_id in self._routes:
+                    agent.state = AgentState.EVACUATING
                     agent.route = self._routes[agent.node_id]
                     agent.route_index = 0
+                else:
+                    # No path to shelter from this node — mark stranded immediately
+                    agent.state = AgentState.STRANDED
 
     def _move_agents(self) -> None:
         for agent in self._agents:
@@ -404,10 +399,18 @@ class Simulation:
 
         to_convert: list[Agent] = []
         for panic_agent in panic_agents:
-            reachable = nx.single_source_shortest_path_length(
-                self._G_full, panic_agent.node_id, cutoff=self._config.panic_radius
-            )
-            for node_id in reachable:
+            # Manual BFS within panic_radius hops — avoids O(N+E) nx traversal per agent per tick
+            visited: set[str] = {panic_agent.node_id}
+            frontier: set[str] = {panic_agent.node_id}
+            for _ in range(self._config.panic_radius):
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    for nb in self._G_full.neighbors(node):
+                        if nb not in visited:
+                            visited.add(nb)
+                            next_frontier.add(nb)
+                frontier = next_frontier
+            for node_id in visited:
                 for neighbor in self._node_to_agents.get(node_id, []):
                     if neighbor.agent_type in (AgentType.COMPLIANT, AgentType.SKEPTICAL):
                         if random.random() < self._config.panic_spread_prob:

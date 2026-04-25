@@ -279,19 +279,19 @@
     <div class="bbox-inputs">
       <div class="bbox-field">
         <label>West (min_lon)</label>
-        <input type="number" id="bbox-west"  step="0.0001" value="-0.4197">
+        <input type="number" id="bbox-west"  step="0.0001" value="-0.4224">
       </div>
       <div class="bbox-field">
         <label>East (max_lon)</label>
-        <input type="number" id="bbox-east"  step="0.0001" value="-0.3891">
+        <input type="number" id="bbox-east"  step="0.0001" value="-0.3849">
       </div>
       <div class="bbox-field">
         <label>South (min_lat)</label>
-        <input type="number" id="bbox-south" step="0.0001" value="39.4165">
+        <input type="number" id="bbox-south" step="0.0001" value="39.4144">
       </div>
       <div class="bbox-field">
         <label>North (max_lat)</label>
-        <input type="number" id="bbox-north" step="0.0001" value="39.4372">
+        <input type="number" id="bbox-north" step="0.0001" value="39.4417">
       </div>
     </div>
     <div class="sat-date-row">
@@ -629,10 +629,10 @@ function initSatMap() {
 }
 
 function drawDefaultBbox() {
-  // Default bbox from config: west=-0.4197, south=39.4165, east=-0.3891, north=39.4372
+  // Gold bbox from scenarios/paiporta.json — 15 flood polygons, 40+ edges blocked
   const bounds = L.latLngBounds(
-    L.latLng(39.4165, -0.4197),
-    L.latLng(39.4372, -0.3891)
+    L.latLng(39.4144, -0.4224),
+    L.latLng(39.4417, -0.3849)
   );
   const rect = L.rectangle(bounds, { color: '#484f58', weight: 1, dashArray: '4', fillOpacity: 0.05 });
   rect.addTo(satMap);

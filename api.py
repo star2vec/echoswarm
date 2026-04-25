@@ -23,10 +23,13 @@ import logging
 import os
 import random
 import sys
+import threading
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 _log = logging.getLogger(__name__)
 
@@ -58,6 +61,7 @@ class _SafeJSONEncoder(json.JSONEncoder):
 # Ensure src/ is importable regardless of working directory
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+from loguru import logger as _llog
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -113,6 +117,15 @@ app.add_middleware(
 # In-process store for polling-based runs: run_id → state dict
 _runs: dict[str, dict] = {}
 
+# Session-level caches to skip redundant flood work on repeated simulation runs.
+# Cleared by /satellite/refresh so a manual satellite update forces re-injection.
+_flood_union_cache: dict[str, Any] = {}   # flood_data_path → merged Shapely geometry
+_flood_injected: dict[str, str]    = {}   # flood_event_id  → flood_data_path last injected with
+
+# Abort flag: set by ws_run when a new connection arrives so a stale thread
+# from a previous (disconnected) WebSocket stops as soon as possible.
+_abort_event = threading.Event()
+
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 
@@ -157,48 +170,89 @@ def run_orchestration(
     flood_data_path = scenario["flood_data_path"]
     n_agents        = n_agents_override if n_agents_override is not None else scenario["n_agents"]
 
+    _abort_event.clear()
+    t_start = time.monotonic()
+
+    def _elapsed() -> str:
+        return f"{time.monotonic() - t_start:.1f}s"
+
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     try:
         # ── 1. Flood injection ─────────────────────────────────────────────────
-        polygons  = get_flooded_sectors(source="local", path=flood_data_path)
-        raw_union = unary_union(polygons)
-        if raw_union.geom_type not in ("Polygon", "MultiPolygon"):
-            flood_geom = MultiPolygon(
-                [g for g in raw_union.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
-            )
-        else:
-            flood_geom = raw_union
+        # Cache the unary_union — merging 1117 EMSR773 polygons takes 5–30 s.
+        # Cache is keyed by path and lives for the server session; cleared by
+        # /satellite/refresh so a manual update still forces re-injection.
+        if flood_data_path not in _flood_union_cache:
+            _llog.info("[{}] building flood union from {} …", _elapsed(), flood_data_path)
+            polygons  = get_flooded_sectors(source="local", path=flood_data_path)
+            raw_union = unary_union(polygons)
+            if raw_union.geom_type not in ("Polygon", "MultiPolygon"):
+                raw_union = MultiPolygon(
+                    [g for g in raw_union.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
+                )
+            _flood_union_cache[flood_data_path] = raw_union
+            _llog.info("[{}] flood union cached", _elapsed())
+        flood_geom = _flood_union_cache[flood_data_path]
 
-        reset_flood(flood_event_id, driver)
-        inject_flood(flood_geom, flood_event_id, driver)
+        # Skip Neo4j reset+inject when flood state is already current for this
+        # scenario — the graph doesn't change between runs.
+        if _flood_injected.get(flood_event_id) != flood_data_path:
+            reset_flood(flood_event_id, driver)
+            inject_flood(flood_geom, flood_event_id, driver)
+            _flood_injected[flood_event_id] = flood_data_path
+        else:
+            _llog.info("[{}] flood injection skipped (cached)", _elapsed())
+
+        if _abort_event.is_set():
+            raise RuntimeError("run aborted — new connection arrived")
 
         # ── 2. Hermes ──────────────────────────────────────────────────────────
+        _llog.info("[{}] get_graph_context …", _elapsed())
         ctx          = get_graph_context(sector, driver)
+        _llog.info("[{}] hermes.generate …", _elapsed())
         hermes       = HermesEngine(sop_scenario=scenario_name)
         hermes_result = hermes.generate(ctx, sector=sector)
+        _llog.info("[{}] hermes done", _elapsed())
+
+        if _abort_event.is_set():
+            raise RuntimeError("run aborted — new connection arrived")
 
         # ── 3. Build swarm ─────────────────────────────────────────────────────
+        _llog.info("[{}] build_nx_graph …", _elapsed())
         G_passable, G_full = build_nx_graph(driver)
+        _llog.info("[{}] graph: {} nodes, {} edges (passable)", _elapsed(),
+                   G_passable.number_of_nodes(), G_passable.number_of_edges())
         shelter_node       = find_shelter_node(G_passable, driver)
         key_tokens         = extract_key_tokens(hermes_result)
         agents             = spawn_agents(G_full, n_agents)
+        _llog.info("[{}] agents spawned ({})", _elapsed(), len(agents))
+
+        if _abort_event.is_set():
+            raise RuntimeError("run aborted — new connection arrived")
 
         # ── 4. Simulation ──────────────────────────────────────────────────────
-        config = SimulationConfig(n_agents=n_agents, max_ticks=50)
+        _llog.info("[{}] simulation init + dijkstra …", _elapsed())
+        config = SimulationConfig(n_agents=n_agents, max_ticks=100)
         sim    = Simulation(
             G_passable, G_full, agents, key_tokens, shelter_node, config,
             tick_callback=tick_callback,
         )
+        _llog.info("[{}] simulation running …", _elapsed())
         sim_result = sim.run()
+        _llog.info("[{}] simulation done ({} ticks, {} safe)", _elapsed(),
+                   sim_result.ticks_run, sim_result.evacuated)
 
         # ── 5. Critic ──────────────────────────────────────────────────────────
+        _llog.info("[{}] critic …", _elapsed())
         critic     = CriticEngine(sop_scenario=scenario_name)
         sop_update = critic.analyze(
             hermes_message=hermes_result.message.human_readable,
             sim_result=asdict(sim_result),
         )
+        _llog.info("[{}] critic done", _elapsed())
 
         # ── 6. Geometry lookups ────────────────────────────────────────────────
+        _llog.info("[{}] geometry lookups …", _elapsed())
         unique_node_ids = list({a.node_id for a in agents} | {shelter_node})
         node_coords     = get_node_coords(unique_node_ids, driver)
 
@@ -206,6 +260,7 @@ def run_orchestration(
         road_geom        = get_road_geometry(sim_result.bottleneck_edges, flooded_road_ids, driver)
 
         # ── 7. Assemble payload ────────────────────────────────────────────────
+        _llog.info("[{}] build_payload …", _elapsed())
         payload = build_payload(
             scenario_name=scenario_name,
             hermes_result=hermes_result,
@@ -221,6 +276,7 @@ def run_orchestration(
     finally:
         driver.close()
 
+    _llog.info("[{}] orchestration complete — sending payload", _elapsed())
     # Sentinel: signals WebSocket/polling that orchestration is done
     if tick_callback is not None:
         tick_callback(None)
@@ -254,6 +310,11 @@ async def ws_run(
         {"type": "complete", "data": <full SimulationPayload>}
         {"type": "error",    "message": "<error string>"}
     """
+    # Signal any in-progress run from a previous (now-disconnected) WebSocket
+    # to stop at its next abort checkpoint.  Prevents two threads fighting over
+    # the same Groq API quota when the browser reconnects mid-simulation.
+    _abort_event.set()
+
     await websocket.accept()
     loop  = asyncio.get_running_loop()
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
@@ -405,6 +466,11 @@ async def satellite_refresh(body: SatelliteRefreshRequest) -> dict:
             total_edges = 0
             for polygon in polygons:
                 total_edges += inject_flood(polygon, body.flood_event_id, driver)
+
+            # Invalidate session caches so the next run_orchestration call
+            # recomputes the union and re-injects the new flood state.
+            _flood_union_cache.clear()
+            _flood_injected.clear()
 
             return {
                 "status":            source_label,
