@@ -1,0 +1,4 @@
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Specify evacuation routes as precise street intersections or sequences of landmarks, rather than just naming roads to avoid, to minimize degradation of route details through word-of-mouth hops.
+- **Rule:** Provide a list of at least three alternative shelters with their precise locations (street intersection and building name) to ensure that agents have sufficient options and can verify shelter availability without relying on a single source.

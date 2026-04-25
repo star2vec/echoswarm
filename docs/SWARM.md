@@ -88,8 +88,28 @@ Simulation ends after MAX_TICKS (configurable, suggest 50) or when no new agents
 
 ---
 
+## Implementation Notes (Phase 4 additions)
+
+### Resolved Design Decisions
+- **Skeptical wait**: 2-source confirmation — agent must receive the message from 2 distinct neighbors (`agent.confirmations >= 2`) before acting or relaying. This models social verification, not a timer.
+- **Panic + blocked roads**: Panic agents use `G_full` (all edges, including flood-blocked) for movement and relay adjacency. Compliant/Skeptical use `G_passable` only. Two graphs are maintained in memory.
+- **Social contagion**: Panic agents spread their type to nearby Compliant/Skeptical agents within `panic_radius` hops (default 2) with probability `panic_spread_prob` (default 0.3). This happens at the end of each tick so conversions take effect next tick.
+
+### Two-Graph Architecture
+- `G_passable`: DiGraph with only passable=True edges. Used for Compliant/Skeptical pathfinding and route pre-computation.
+- `G_full`: DiGraph with all edges including flood-blocked. Used for Panic movement, relay adjacency across all agent types, and panic contagion BFS.
+- Both graphs are built from Neo4j state at simulation start via `build_nx_graph(driver)`.
+
+### Token Extraction
+Key tokens are derived from Hermes output fields: `which_route`, `where`, `what`. Words shorter than 4 characters and common stop words are filtered out. The resulting `frozenset[str]` is the canonical set tracked for information decay.
+
+### Route Pre-computation
+At simulation init, `nx.shortest_path(G_passable, source, shelter_node, weight="travel_time_min")` is computed for every reachable intersection. Compliant/Skeptical agents look up their route in O(1). Unreachable nodes (cut off by flood) produce no route; agents in those nodes remain EVACUATING indefinitely.
+
+### Snapshot Semantics
+All relay operations within a single tick are collected first, then applied together. This prevents same-tick cascade propagation and ensures `hop_count` accurately reflects the number of ticks elapsed since seed broadcast.
+
 ## Open Items
 - [ ] Decide N (total agents). Suggest 500–1000 for fast demo runs.
-- [ ] Confirm population density weighting source for Valencia district
-- [ ] Define "message clarity threshold" for evacuation decision (currently: preservation_rate > 0.6)
+- [ ] Confirm population density weighting source for Valencia district (currently: uniform random placement)
 - [ ] Design replay file format for demo (pre-recorded tick-by-tick state)
