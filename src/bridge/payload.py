@@ -126,6 +126,24 @@ def build_payload(
         if (coords := node_coords.get(agent.node_id)) is not None
     ]
 
+    # Replay: 200 sampled agents, per-tick [lat, lon, state] history
+    agent_replay: list[dict] = []
+    snapshots = sim_result.agent_replay_snapshots
+    if snapshots:
+        n_in_sample = len(snapshots[0])
+        for agent_idx in range(n_in_sample):
+            agent_id = snapshots[0][agent_idx]["id"]
+            history: list[list] = []
+            for tick_snap in snapshots:
+                if agent_idx >= len(tick_snap):
+                    continue
+                s = tick_snap[agent_idx]
+                coords = node_coords.get(s["node_id"])
+                if coords:
+                    history.append([coords[0], coords[1], s["state"]])
+            if history:
+                agent_replay.append({"id": agent_id, "history": history})
+
     # Bottleneck roads with geometry and crossing counts
     by_name = road_geom.get("by_name", {})
     counts = sim_result.bottleneck_counts
@@ -176,6 +194,7 @@ def build_payload(
         "agents_final":     agents_final,
         "bottleneck_roads": bottleneck_roads,
         "flooded_roads":    flooded_roads,
+        "agent_replay":     agent_replay,
     }
 
     return {

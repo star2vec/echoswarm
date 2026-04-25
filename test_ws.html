@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>ECHO-SWARM · Live Mission Control</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -97,10 +98,30 @@
   }
   .agent-hint { font-size: 0.75rem; color: #484f58; }
 
-  /* Satellite control card */
+  /* Dual-map mission intelligence */
   .sat-card { margin-top: 16px; }
-  .sat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
-  #sat-map { height: 300px; border-radius: 6px; border: 1px solid #30363d; }
+  .dual-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  .map-panel { display: flex; flex-direction: column; gap: 6px; }
+  .map-label { font-size: 0.72rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.08em; font-weight: bold; }
+  .map-wrap { position: relative; }
+  #sat-map, #fleet-map { height: 380px; border-radius: 6px; border: 1px solid #30363d; }
+  .map-overlay {
+    position: absolute; inset: 0; z-index: 1000; border-radius: 6px;
+    background: rgba(13,17,23,0.82); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    transition: opacity 0.4s ease;
+  }
+  .map-overlay.hidden { opacity: 0; pointer-events: none; }
+  .map-overlay span { color: #484f58; font-size: 0.82rem; font-family: 'Courier New', monospace; letter-spacing: 0.04em; }
+  .btn-playback {
+    background: #1f3a5f; border: 1px solid #388bfd; color: #58a6ff;
+    padding: 9px 18px; border-radius: 6px; cursor: pointer; font-weight: bold;
+    font-size: 0.85rem; width: 100%; transition: all 0.2s; margin-top: 2px;
+  }
+  .btn-playback:hover:not(:disabled) { background: #2952a3; transform: translateY(-1px); }
+  .btn-playback:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .playback-ticker { font-size: 0.75rem; color: #484f58; font-family: 'Courier New', monospace; text-align: center; }
+  .sat-controls-row { margin-top: 16px; padding-top: 14px; border-top: 1px solid #21262d; }
   .bbox-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .bbox-field { display: flex; flex-direction: column; gap: 4px; }
   .bbox-field label { font-size: 0.75rem; color: #8b949e; }
@@ -126,7 +147,7 @@
   #sat-status.live     { border-color: #3fb950; color: #3fb950; }
   #sat-status.fallback { border-color: #d29922; color: #d29922; }
   #sat-status.error    { border-color: #f85149; color: #f85149; }
-  .draw-hint { font-size: 0.78rem; color: #484f58; margin-top: 6px; font-style: italic; }
+  .draw-hint { font-size: 0.78rem; color: #484f58; margin-top: 4px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -193,6 +214,10 @@
       <span class="label">Critic Diagnosis</span>
       <span class="value yellow" id="diagnosis" style="font-size:0.8rem; text-align: right; max-width: 60%;">—</span>
     </div>
+    <div style="margin-top: 18px;">
+      <span class="label" style="display:block; margin-bottom: 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8b949e;">Information Decay Curve</span>
+      <canvas id="decay-chart" height="80" style="width:100%;"></canvas>
+    </div>
   </div>
 </div>
 
@@ -216,47 +241,65 @@
   <div id="sop-text" class="sop-content"></div>
 </div>
 
-<!-- Task 3: Satellite Control -->
+<!-- Dual-Map Mission Intelligence -->
 <div class="card sat-card">
-  <h2>🛰 Satellite Data Control — Live BBOX Refresh</h2>
-  <div class="sat-grid">
-    <!-- Map panel -->
-    <div>
-      <div id="sat-map"></div>
-      <p class="draw-hint">Draw a rectangle on the map to set the bounding box, or enter coordinates manually.</p>
+  <h2>🗺️ Dual-Map Mission Intelligence</h2>
+  <div class="dual-map-grid">
+    <!-- Map A: Satellite Flood Injection -->
+    <div class="map-panel">
+      <div class="map-label">🛰️ Satellite Flood Injection</div>
+      <div class="map-wrap">
+        <div id="sat-map"></div>
+        <div class="map-overlay" id="map-overlay-a">
+          <span>Run a simulation to see flood data</span>
+        </div>
+      </div>
+      <p class="draw-hint">Draw a rectangle to set bounding box for satellite refresh.</p>
     </div>
-    <!-- Controls panel -->
-    <div>
-      <div style="font-size:0.8rem; color:#8b949e; margin-bottom:8px;">
-        Bounding Box — WGS-84 (min_lon, min_lat, max_lon, max_lat)
-      </div>
-      <div class="bbox-inputs">
-        <div class="bbox-field">
-          <label>West (min_lon)</label>
-          <input type="number" id="bbox-west"  step="0.0001" value="-0.4197">
-        </div>
-        <div class="bbox-field">
-          <label>East (max_lon)</label>
-          <input type="number" id="bbox-east"  step="0.0001" value="-0.3891">
-        </div>
-        <div class="bbox-field">
-          <label>South (min_lat)</label>
-          <input type="number" id="bbox-south" step="0.0001" value="39.4165">
-        </div>
-        <div class="bbox-field">
-          <label>North (max_lat)</label>
-          <input type="number" id="bbox-north" step="0.0001" value="39.4372">
+    <!-- Map B: Live Fleet Deployment -->
+    <div class="map-panel">
+      <div class="map-label">🤖 Live Fleet Deployment</div>
+      <div class="map-wrap">
+        <div id="fleet-map"></div>
+        <div class="map-overlay" id="map-overlay-b">
+          <span>Run a simulation to replay agent movement</span>
         </div>
       </div>
-
-      <div class="sat-date-row">
-        <label for="sat-date">Sentinel-1 Date</label>
-        <input type="date" id="sat-date" value="2024-10-30">
-      </div>
-
-      <button class="btn-sat" onclick="refreshSatellite()">🔄 Refresh Satellite Data</button>
-      <div id="sat-status"></div>
+      <button class="btn-playback" id="btn-playback" disabled onclick="startPlayback()">
+        ▶️ Start Mission Playback
+      </button>
+      <div class="playback-ticker" id="playback-ticker">—</div>
     </div>
+  </div>
+  <!-- Satellite controls row -->
+  <div class="sat-controls-row">
+    <div style="font-size:0.8rem; color:#8b949e; margin-bottom:8px;">
+      Bounding Box — WGS-84 (min_lon, min_lat, max_lon, max_lat)
+    </div>
+    <div class="bbox-inputs">
+      <div class="bbox-field">
+        <label>West (min_lon)</label>
+        <input type="number" id="bbox-west"  step="0.0001" value="-0.4197">
+      </div>
+      <div class="bbox-field">
+        <label>East (max_lon)</label>
+        <input type="number" id="bbox-east"  step="0.0001" value="-0.3891">
+      </div>
+      <div class="bbox-field">
+        <label>South (min_lat)</label>
+        <input type="number" id="bbox-south" step="0.0001" value="39.4165">
+      </div>
+      <div class="bbox-field">
+        <label>North (max_lat)</label>
+        <input type="number" id="bbox-north" step="0.0001" value="39.4372">
+      </div>
+    </div>
+    <div class="sat-date-row">
+      <label for="sat-date">Sentinel-1 Date</label>
+      <input type="date" id="sat-date" value="2024-10-30">
+    </div>
+    <button class="btn-sat" onclick="refreshSatellite()">🔄 Refresh Satellite Data</button>
+    <div id="sat-status"></div>
   </div>
 </div>
 
@@ -307,6 +350,16 @@ function runSimulation() {
   sopBox.classList.remove('visible');
   sopBox.style.display = 'none';
 
+  // Show loading overlays on both maps, disable playback
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  document.getElementById('map-overlay-a').classList.remove('hidden');
+  document.getElementById('map-overlay-a').querySelector('span').textContent = 'Simulation in progress...';
+  document.getElementById('map-overlay-b').classList.remove('hidden');
+  document.getElementById('map-overlay-b').querySelector('span').textContent = 'Simulation in progress...';
+  document.getElementById('btn-playback').disabled = true;
+  document.getElementById('btn-playback').textContent = '▶️ Start Mission Playback';
+  document.getElementById('playback-ticker').textContent = '—';
+
   const dot   = document.getElementById('dot');
   const label = document.getElementById('status-label');
   dot.className     = 'status-dot live';
@@ -349,6 +402,100 @@ function runSimulation() {
           document.getElementById('stranded').textContent   = p.summary.stranded;
           document.getElementById('clarity').textContent    = p.hermes.clarity.overall + '/10';
           document.getElementById('diagnosis').textContent  = p.critic.diagnosis;
+
+          // ── MAP A: Satellite Flood Injection ────────────────────────────────
+          const mapData = p.map || {};
+          if (simLayer) simLayer.clearLayers();
+
+          // Flooded roads: thick red polylines
+          (mapData.flooded_roads || []).forEach(road => {
+            if (!road.coords || road.coords.length < 2) return;
+            L.polyline(road.coords, { color: '#f85149', weight: 5, opacity: 0.85 })
+              .bindTooltip(`Flooded: ${road.name || road.highway || 'road'}`)
+              .addTo(simLayer);
+          });
+
+          // Bottleneck roads: orange dashed polylines with crossing count tooltip
+          (mapData.bottleneck_roads || []).forEach(road => {
+            if (!road.coords || road.coords.length < 2) return;
+            L.polyline(road.coords, { color: '#e3b341', weight: 4, opacity: 0.95, dashArray: '10 6' })
+              .bindTooltip(`Bottleneck #${road.rank}: ${road.name} (${road.crossing_count} crossings)`)
+              .addTo(simLayer);
+          });
+
+          // Shelter on Map A
+          if (mapData.shelter && mapData.shelter.lat) {
+            L.circleMarker([mapData.shelter.lat, mapData.shelter.lon], {
+              radius: 11, color: '#ffffff', fillColor: '#2ea043',
+              fillOpacity: 1, weight: 2.5
+            }).bindTooltip(`Shelter: ${mapData.shelter.name || 'Refuge'}`, { permanent: false })
+              .addTo(simLayer);
+          }
+
+          if (mapData.bounds) {
+            satMap.fitBounds([
+              [mapData.bounds.south, mapData.bounds.west],
+              [mapData.bounds.north, mapData.bounds.east]
+            ], { padding: [20, 20] });
+          }
+          // ── END MAP A ────────────────────────────────────────────────────────
+
+          // ── MAP B: Live Fleet Deployment (final state, pre-playback) ─────────
+          if (fleetSimLayer) fleetSimLayer.clearLayers();
+          (mapData.agents_final || []).forEach(a => {
+            const c = stateColor[a.state] || '#888';
+            L.circleMarker([a.lat, a.lon], {
+              radius: 3.5, color: c, fillColor: c, fillOpacity: 0.75, weight: 0
+            }).addTo(fleetSimLayer);
+          });
+
+          if (mapData.bounds && fleetMap) {
+            fleetMap.fitBounds([
+              [mapData.bounds.south, mapData.bounds.west],
+              [mapData.bounds.north, mapData.bounds.east]
+            ], { padding: [20, 20] });
+          }
+          // ── END MAP B ────────────────────────────────────────────────────────
+
+          // Store replay data and enable playback
+          replayData       = mapData.agent_replay || [];
+          replayFloodRoads = mapData.flooded_roads || [];
+          replayTotalTicks = (p.time_series || []).length;
+          replayTick       = 0;
+          document.getElementById('btn-playback').disabled = (replayData.length === 0);
+          document.getElementById('playback-ticker').textContent =
+            `${replayData.length} agents tracked · ${replayTotalTicks} ticks`;
+
+          // Hide loading overlays
+          document.getElementById('map-overlay-a').classList.add('hidden');
+          document.getElementById('map-overlay-b').classList.add('hidden');
+
+          // ── DECAY CURVE CHART ────────────────────────────────────────────────
+          const tsData = (p.time_series || []).map(t => t.preservation_rate ?? 0);
+          if (tsData.length > 1) {
+            if (window._decayChart) window._decayChart.destroy();
+            window._decayChart = new Chart(document.getElementById('decay-chart'), {
+              type: 'line',
+              data: {
+                labels: tsData.map((_, i) => `T${i}`),
+                datasets: [{
+                  data: tsData,
+                  borderColor: '#1f6feb',
+                  backgroundColor: 'rgba(31,111,235,0.12)',
+                  tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2
+                }]
+              },
+              options: {
+                animation: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { color: '#6e7681', maxTicksLimit: 6, font: { size: 10 } }, grid: { color: '#21262d' } },
+                  y: { min: 0, max: 1, ticks: { color: '#6e7681', font: { size: 10 } }, grid: { color: '#21262d' } }
+                }
+              }
+            });
+          }
+          // ── END DECAY CURVE CHART ────────────────────────────────────────────
 
           document.getElementById('progress').style.width = '100%';
           document.getElementById('progress').classList.add('done');
@@ -401,10 +548,30 @@ function runSimulation() {
   };
 }
 
-// ── Task 3: Leaflet map + satellite refresh ──────────────────────────────────
+// ── Task 3: Leaflet maps + satellite refresh ─────────────────────────────────
 let satMap = null;
 let drawnItems = null;
 let currentRectLayer = null;
+let simLayer = null;
+
+let fleetMap = null;
+let fleetSimLayer = null;
+
+// Replay state
+let replayData       = null;
+let replayFloodRoads = null;
+let replayTimer      = null;
+let replayTick       = 0;
+let replayTotalTicks = 0;
+
+// Agent state → colour mapping (module-level so playback and complete handler share it)
+const stateColor = {
+  safe:       '#2ea043',
+  evacuating: '#1f6feb',
+  informed:   '#e3b341',
+  stranded:   '#f85149',
+  waiting:    '#6e7681',
+};
 
 function initSatMap() {
   // Paiporta centre
@@ -416,6 +583,7 @@ function initSatMap() {
   }).addTo(satMap);
 
   drawnItems = new L.FeatureGroup().addTo(satMap);
+  simLayer = L.layerGroup().addTo(satMap);
 
   const drawControl = new L.Control.Draw({
     draw: {
@@ -468,6 +636,65 @@ function drawDefaultBbox() {
   );
   const rect = L.rectangle(bounds, { color: '#484f58', weight: 1, dashArray: '4', fillOpacity: 0.05 });
   rect.addTo(satMap);
+}
+
+function initFleetMap() {
+  fleetMap = L.map('fleet-map').setView([39.428, -0.4037], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(fleetMap);
+  fleetSimLayer = L.layerGroup().addTo(fleetMap);
+}
+
+function startPlayback() {
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+
+  const btn = document.getElementById('btn-playback');
+  btn.textContent = '⏹ Stop Playback';
+  btn.onclick = stopPlayback;
+
+  // Map A: staggered flood road reveal (60ms per road — visual storytelling of Sentinel-1 data)
+  if (simLayer) simLayer.clearLayers();
+  (replayFloodRoads || []).forEach((road, i) => {
+    if (!road.coords || road.coords.length < 2) return;
+    setTimeout(() => {
+      L.polyline(road.coords, { color: '#f85149', weight: 5, opacity: 0.85 })
+        .bindTooltip(`Flooded: ${road.name || road.highway || 'road'}`)
+        .addTo(simLayer);
+    }, i * 60);
+  });
+
+  replayTick = 0;
+  replayTimer = setInterval(() => {
+    if (replayTick >= replayTotalTicks) {
+      stopPlayback();
+      return;
+    }
+
+    // Map B: update 200 sampled agent positions for this tick
+    if (fleetSimLayer) fleetSimLayer.clearLayers();
+    (replayData || []).forEach(agent => {
+      const frame = agent.history[replayTick];
+      if (!frame) return;
+      const [lat, lon, state] = frame;
+      const c = stateColor[state] || '#888';
+      L.circleMarker([lat, lon], {
+        radius: 4, color: c, fillColor: c, fillOpacity: 0.8, weight: 0
+      }).addTo(fleetSimLayer);
+    });
+
+    document.getElementById('playback-ticker').textContent =
+      `Tick ${replayTick + 1} / ${replayTotalTicks}`;
+    replayTick++;
+  }, 300);
+}
+
+function stopPlayback() {
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  const btn = document.getElementById('btn-playback');
+  btn.textContent = '▶️ Start Mission Playback';
+  btn.onclick = startPlayback;
 }
 
 async function refreshSatellite() {
@@ -528,8 +755,8 @@ function showSatStatus(cls, text) {
   });
 });
 
-// Init map after DOM is ready
-window.addEventListener('load', initSatMap);
+// Init both maps after DOM is ready
+window.addEventListener('load', () => { initSatMap(); initFleetMap(); });
 </script>
 </body>
 </html>

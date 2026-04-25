@@ -207,6 +207,7 @@ class SimulationResult:
     bottleneck_counts: list[int]  # crossing counts parallel to bottleneck_edges
     ticks_run: int
     tick_history: list[dict] = field(default_factory=list)  # per-tick metrics for API streaming
+    agent_replay_snapshots: list[list[dict]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +239,13 @@ class Simulation:
         self._node_to_agents: dict[str, list[Agent]] = {}
         for agent in self._agents:
             self._node_to_agents.setdefault(agent.node_id, []).append(agent)
+
+        # Sample up to 200 agents for per-tick replay history (map animation)
+        _REPLAY_N = 200
+        self._replay_agents: list[Agent] = random.sample(
+            self._agents, min(_REPLAY_N, len(self._agents))
+        )
+        self._replay_snapshots: list[list[dict]] = []
 
         # Pre-compute evacuation routes from every reachable node to the shelter
         self._routes: dict[str, list[str]] = {}
@@ -285,6 +293,10 @@ class Simulation:
         self._spread_panic()
         result = self._compute_tick_metrics()
         self._tick_log.append(result)
+        self._replay_snapshots.append([
+            {"id": a.id, "node_id": a.node_id, "state": a.state.value}
+            for a in self._replay_agents
+        ])
         if self._tick_callback is not None:
             self._tick_callback(asdict(result))
         return result
@@ -479,4 +491,5 @@ class Simulation:
             bottleneck_counts=[count for _, count in top_bottlenecks],
             ticks_run=len(self._tick_log),
             tick_history=[asdict(r) for r in self._tick_log],
+            agent_replay_snapshots=self._replay_snapshots,
         )

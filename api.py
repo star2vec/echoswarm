@@ -277,11 +277,11 @@ async def ws_run(
 
         payload = await future
 
-        # Cap agents_final to 500 sampled entries — the full list is unused in
-        # the current frontend and grows large with high agent counts.
+        # Cap agents_final to 1000 sampled entries to prevent browser UI freezing
+        # on large simulations while keeping enough density for meaningful map rendering.
         agents_final = payload.get("map", {}).get("agents_final", [])
-        if len(agents_final) > 500:
-            payload["map"]["agents_final"] = random.sample(agents_final, 500)
+        if len(agents_final) > 1000:
+            payload["map"]["agents_final"] = random.sample(agents_final, 1000)
 
         # Pre-serialize with a tolerant encoder so any type error surfaces as a
         # clear terminal log rather than a silent WebSocket drop.
