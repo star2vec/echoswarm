@@ -277,3 +277,27 @@
 - **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without needing external confirmation.
 - **Rule:** Specify primary and alternative shelter locations as precise street intersections, including nearby landmarks, to reduce route ambiguity and facilitate word-of-mouth communication.
 - **Rule:** Provide a list of currently flooded or closed roads, in addition to open routes, to help agents navigate and make informed decisions during evacuation.
+
+---
+
+**Run:** 1e9f81df · **2026-04-25T23:41:51Z** · Evac rate: 13.3%
+
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.
+
+---
+
+**Run:** 9a2a2849 · **2026-04-25T23:45:38Z** · Evac rate: 8.7%
+
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.
+
+---
+
+**Run:** e513a223 · **2026-04-25T23:46:59Z** · Evac rate: 9.0%
+
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.

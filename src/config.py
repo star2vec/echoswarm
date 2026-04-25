@@ -1,8 +1,5 @@
 """
-src/config.py — Hermes Engine provider configuration.
-
-To swap from Groq (dev) to Anthropic (production), change LLM_PROVIDER here,
-or set the LLM_PROVIDER environment variable. Everything else is automatic.
+src/config.py — LLM and infrastructure configuration for ECHO-SWARM.
 """
 
 from __future__ import annotations
@@ -13,29 +10,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Provider Selection ────────────────────────────────────────────────────────
-# "groq"       → Groq API  (llama-3.1-70b-versatile) — default for dev/simulation
-# "anthropic"  → Anthropic API (claude-sonnet-4-6)   — production swap
-LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "groq")
+# ── Anthropic ──────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY: str   = os.getenv("ANTHROPIC_API_KEY", "")
+ANTHROPIC_MODEL:   str   = "claude-3-5-haiku-latest"   # fast + capable for CERC JSON
 
-# ── Groq (default: development + simulation) ──────────────────────────────────
-GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-GROQ_MAIN_MODEL: str = "llama-3.3-70b-versatile"
-GROQ_FAST_MODEL: str = "llama-3.1-8b-instant"  # clarity validator
-
-# ── Anthropic (production swap) ───────────────────────────────────────────────
-ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MAIN_MODEL: str = "claude-3-5-sonnet-20240620"  # or claude-sonnet-4-6
-ANTHROPIC_FAST_MODEL: str = "claude-haiku-4-5-20251001"   # clarity validator
-
-# ── Satellite / CDSE (Phase 2) ───────────────────────────────────────────────
+# ── Satellite / CDSE (Phase 2) ────────────────────────────────────────────────
 CDSE_CLIENT_ID:     str = os.getenv("CDSE_CLIENT_ID",     "")
 CDSE_CLIENT_SECRET: str = os.getenv("CDSE_CLIENT_SECRET", "")
 # Valencia/Paiporta district bbox — (min_lon, min_lat, max_lon, max_lat) WGS-84
 VALENCIA_BBOX: tuple[float, float, float, float] = (-0.4197, 39.4165, -0.3891, 39.4372)
 
-# ── Hermes Engine Limits ──────────────────────────────────────────────────────
-HERMES_MAX_RETRIES: int = 3
+# ── Hermes Engine Limits ───────────────────────────────────────────────────────
+HERMES_MAX_RETRIES: int          = 2
 HERMES_CLARITY_PASS_THRESHOLD: int = 7
-HERMES_MAX_TOKENS: int = 1024    # main generation budget
-HERMES_FAST_MAX_TOKENS: int = 256  # clarity validator budget
+HERMES_MAX_TOKENS: int           = 1024
+HERMES_FAST_MAX_TOKENS: int      = 256

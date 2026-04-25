@@ -21,9 +21,10 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
+
+from loguru import logger
 
 try:
     from .. import config
@@ -32,7 +33,11 @@ except ImportError:
     import config  # type: ignore[no-redef]
     from hermes.engine import _build_clients  # type: ignore[no-redef]
 
-logger = logging.getLogger(__name__)
+_FALLBACK_SOP_UPDATE = """\
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.\
+"""
 
 _SOPS_DIR = Path(__file__).resolve().parent.parent.parent / "sops"
 
@@ -92,25 +97,16 @@ class CriticEngine:
     so HermesEngine picks it up on the next invocation.
 
     Args:
-        provider:     "groq" or "anthropic". Defaults to config.LLM_PROVIDER.
         sop_scenario: Scenario name used to name sop files (default "valencia").
     """
 
-    def __init__(
-        self,
-        provider: str | None = None,
-        *,
-        sop_scenario: str = "valencia",
-    ) -> None:
-        self.provider = provider or config.LLM_PROVIDER
-        self._client, _ = _build_clients(self.provider)
+    def __init__(self, *, sop_scenario: str = "valencia") -> None:
+        self._client, _ = _build_clients()
         self._scenario = sop_scenario
         _SOPS_DIR.mkdir(parents=True, exist_ok=True)
         logger.info(
-            "CriticEngine initialised — provider=%s  model=%s  scenario=%s",
-            self.provider,
-            self._client.model,
-            sop_scenario,
+            "CriticEngine initialised — model={}  scenario={}",
+            self._client.model, sop_scenario,
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -137,14 +133,17 @@ class CriticEngine:
         user_prompt = self._build_user_prompt(hermes_message, sim_result)
         evac_pct = sim_result.get("evacuation_rate", 0.0) * 100
         logger.info(
-            "CriticEngine.analyze — run_id=%s  evacuation_rate=%.1f%%  provider=%s",
+            "CriticEngine.analyze — run_id={}  evacuation_rate={:.1f}%  model={}",
             sim_result.get("run_id", "unknown"),
             evac_pct,
-            self.provider,
+            self._client.model,
         )
 
-        raw = self._client.complete(_CRITIC_SYSTEM_PROMPT, user_prompt, max_tokens=512)
-        sop_update = raw.strip()
+        raw = self._client.complete(
+            _CRITIC_SYSTEM_PROMPT, user_prompt, max_tokens=512,
+            fallback=_FALLBACK_SOP_UPDATE,
+        )
+        sop_update = raw.strip() or _FALLBACK_SOP_UPDATE
 
         self._persist(sop_update, sim_result)
         return sop_update
@@ -179,7 +178,7 @@ class CriticEngine:
         """Overwrite the scenario playbook and append a full entry to the history log."""
         playbook = _SOPS_DIR / f"{self._scenario}.md"
         playbook.write_text(sop_update, encoding="utf-8")
-        logger.info("Playbook overwritten → %s", playbook.name)
+        logger.info("Playbook overwritten → {}", playbook.name)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         run_id = sim_result.get("run_id", "unknown")
@@ -193,4 +192,4 @@ class CriticEngine:
         history = _SOPS_DIR / f"{self._scenario}_history.md"
         with history.open("a", encoding="utf-8") as fh:
             fh.write(history_entry)
-        logger.info("Appended to %s", history.name)
+        logger.info("Appended to {}", history.name)

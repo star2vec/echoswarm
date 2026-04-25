@@ -171,39 +171,39 @@ def run_orchestration(
         # a prior /api/refresh_map call for a different city is not silently overwritten.
 
         # ── 1. Hermes ──────────────────────────────────────────────────────────
-        ctx          = get_graph_context(sector, driver)
-        hermes       = HermesEngine(sop_scenario=scenario_name)
+        ctx           = get_graph_context(sector, driver)
+        hermes        = HermesEngine(sop_scenario=scenario_name)
         hermes_result = hermes.generate(ctx, sector=sector)
 
-        # ── 3. Build swarm ─────────────────────────────────────────────────────
+        # ── 2. Build swarm ─────────────────────────────────────────────────────
         G_passable, G_full = build_nx_graph(driver)
         shelter_node       = find_shelter_node(G_passable, driver)
         key_tokens         = extract_key_tokens(hermes_result)
         agents             = spawn_agents(G_full, n_agents)
 
-        # ── 4. Simulation ──────────────────────────────────────────────────────
-        config = SimulationConfig(n_agents=n_agents, max_ticks=50)
-        sim    = Simulation(
-            G_passable, G_full, agents, key_tokens, shelter_node, config,
+        # ── 3. Simulation ──────────────────────────────────────────────────────
+        sim_cfg = SimulationConfig(n_agents=n_agents, max_ticks=100)
+        sim     = Simulation(
+            G_passable, G_full, agents, key_tokens, shelter_node, sim_cfg,
             tick_callback=tick_callback,
         )
         sim_result = sim.run()
 
-        # ── 5. Critic ──────────────────────────────────────────────────────────
+        # ── 4. Critic ──────────────────────────────────────────────────────────
         critic     = CriticEngine(sop_scenario=scenario_name)
         sop_update = critic.analyze(
             hermes_message=hermes_result.message.human_readable,
             sim_result=asdict(sim_result),
         )
 
-        # ── 6. Geometry lookups ────────────────────────────────────────────────
+        # ── 5. Geometry lookups ────────────────────────────────────────────────
         unique_node_ids = list({a.node_id for a in agents} | {shelter_node})
         node_coords     = get_node_coords(unique_node_ids, driver)
 
         flooded_road_ids = [r["id"] for r in ctx.get("flooded_roads", []) if r.get("id")]
         road_geom        = get_road_geometry(sim_result.bottleneck_edges, flooded_road_ids, driver)
 
-        # ── 7. Assemble payload ────────────────────────────────────────────────
+        # ── 6. Assemble payload ────────────────────────────────────────────────
         payload = build_payload(
             scenario_name=scenario_name,
             hermes_result=hermes_result,
@@ -218,10 +218,10 @@ def run_orchestration(
 
     finally:
         driver.close()
-
-    # Sentinel: signals WebSocket/polling that orchestration is done
-    if tick_callback is not None:
-        tick_callback(None)
+        # Always fire the sentinel so ws_run's queue.get() loop terminates
+        # even if an exception was raised above.
+        if tick_callback is not None:
+            tick_callback(None)
 
     return payload
 
