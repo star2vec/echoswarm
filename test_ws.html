@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <title>ECHO-SWARM · Live Mission Control</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Draw -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; }
@@ -29,7 +35,7 @@
   .progress-fill.done { background: #3fb950; }
 
   .log { background: #010409; border: 1px solid #30363d; border-radius: 8px; padding: 12px;
-         height: 250px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.8rem; line-height: 1.6; }
+         height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.8rem; line-height: 1.6; }
   .log .ts     { color: #484f58; }
   .log .tick   { color: #58a6ff; }
   .log .ok     { color: #3fb950; font-weight: bold; }
@@ -37,6 +43,24 @@
   .log .info   { color: #8b949e; }
   .log .header { color: #8b949e; border-bottom: 1px solid #21262d; margin-bottom: 5px; }
 
+  /* Hermes Broadcast box */
+  .broadcast-box {
+    background: #0d1117; border: 1px solid #f2cc60; border-radius: 8px; padding: 20px;
+    margin-top: 16px; display: none; opacity: 0; transform: translateY(10px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .broadcast-box.visible { display: block; opacity: 1; transform: translateY(0); }
+  .broadcast-box h2 { font-size: 0.75rem; color: #f2cc60; text-transform: uppercase;
+                      letter-spacing: 0.1em; margin-bottom: 15px;
+                      border-bottom: 1px solid #f2cc6040; padding-bottom: 8px; }
+  .broadcast-text {
+    font-size: 1rem; line-height: 1.7; color: #e6edf3;
+    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
+    padding: 16px; white-space: pre-wrap; font-family: Georgia, serif;
+    border-left: 4px solid #f2cc60;
+  }
+
+  /* SOP box */
   .sop-box { background: #0d1117; border: 1px solid #388bfd; border-radius: 8px; padding: 20px;
              margin-top: 16px; display: none; opacity: 0; transform: translateY(10px);
              transition: opacity 0.5s ease, transform 0.5s ease; }
@@ -57,8 +81,52 @@
   button:hover { background: #2ea043; transform: translateY(-1px); }
   button:disabled { background: #21262d; border-color: #30363d; opacity: 0.6; cursor: not-allowed; transform: none; }
 
-  #controls { margin-bottom: 24px; background: #161b22; padding: 15px; border-radius: 8px;
-              border: 1px solid #30363d; display: flex; align-items: center; gap: 15px; }
+  #controls {
+    margin-bottom: 24px; background: #161b22; padding: 15px; border-radius: 8px;
+    border: 1px solid #30363d; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  .agent-control { display: flex; align-items: center; gap: 10px; }
+  .agent-control label { color: #8b949e; font-size: 0.85rem; white-space: nowrap; }
+  .agent-control input[type="range"] {
+    width: 160px; accent-color: #58a6ff; cursor: pointer;
+  }
+  .agent-control input[type="number"] {
+    width: 75px; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+    border-radius: 4px; padding: 4px 8px; font-family: 'Courier New', monospace;
+    font-size: 0.9rem; text-align: center;
+  }
+  .agent-hint { font-size: 0.75rem; color: #484f58; }
+
+  /* Satellite control card */
+  .sat-card { margin-top: 16px; }
+  .sat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+  #sat-map { height: 300px; border-radius: 6px; border: 1px solid #30363d; }
+  .bbox-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .bbox-field { display: flex; flex-direction: column; gap: 4px; }
+  .bbox-field label { font-size: 0.75rem; color: #8b949e; }
+  .bbox-field input {
+    background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+    border-radius: 4px; padding: 6px 10px; font-family: 'Courier New', monospace;
+    font-size: 0.85rem; width: 100%;
+  }
+  .bbox-field input:focus { outline: none; border-color: #58a6ff; }
+  .sat-date-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .sat-date-row label { font-size: 0.85rem; color: #8b949e; white-space: nowrap; }
+  .sat-date-row input[type="date"] {
+    background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+    border-radius: 4px; padding: 6px 10px; font-size: 0.85rem; flex: 1;
+  }
+  .btn-sat { background: #1f3a5f; border-color: #388bfd; margin-top: 12px; width: 100%; }
+  .btn-sat:hover { background: #2952a3; }
+  #sat-status {
+    margin-top: 10px; padding: 10px; border-radius: 6px; font-size: 0.82rem;
+    font-family: 'Courier New', monospace; display: none;
+    border: 1px solid #30363d; background: #010409; color: #8b949e;
+  }
+  #sat-status.live     { border-color: #3fb950; color: #3fb950; }
+  #sat-status.fallback { border-color: #d29922; color: #d29922; }
+  #sat-status.error    { border-color: #f85149; color: #f85149; }
+  .draw-hint { font-size: 0.78rem; color: #484f58; margin-top: 6px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -69,6 +137,15 @@
   <button id="btn-run" onclick="runSimulation()">▶ Launch Simulation</button>
   <span class="status-dot" id="dot"></span>
   <span id="status-label" style="color: #8b949e;">System Ready</span>
+
+  <div class="agent-control">
+    <label for="agent-slider">Swarm Size</label>
+    <input type="range" id="agent-slider" min="100" max="5000" step="100" value="500"
+           oninput="syncAgentInput(this.value)">
+    <input type="number" id="agent-number" min="1" max="5000" step="100" value="500"
+           oninput="syncAgentSlider(this.value)">
+    <span class="agent-hint">(max 5 000 · &gt;2 000 slower)</span>
+  </div>
 </div>
 
 <div class="grid">
@@ -124,17 +201,78 @@
   <div class="log" id="log"></div>
 </div>
 
+<!-- Task 1: Hermes Evacuation Broadcast -->
+<div class="broadcast-box" id="broadcast-box">
+  <h2>📢 Hermes Evacuation Broadcast</h2>
+  <div class="broadcast-text" id="broadcast-text"></div>
+</div>
+
+<!-- SOP Re-Calibration -->
 <div class="sop-box" id="sop-box">
-  <h2 style="color: #58a6ff; border-bottom: 1px solid #388bfd; margin-bottom: 15px;">📡 Autonomous SOP Re-Calibration</h2>
+  <h2 style="font-size:0.75rem; color: #58a6ff; text-transform: uppercase; letter-spacing: 0.1em;
+             border-bottom: 1px solid #388bfd40; padding-bottom: 8px; margin-bottom: 15px;">
+    📡 Autonomous SOP Re-Calibration
+  </h2>
   <div id="sop-text" class="sop-content"></div>
 </div>
 
-<script>
-const WS_URL = 'ws://localhost:8000/ws/run?scenario=paiporta';
-let ws = null;
+<!-- Task 3: Satellite Control -->
+<div class="card sat-card">
+  <h2>🛰 Satellite Data Control — Live BBOX Refresh</h2>
+  <div class="sat-grid">
+    <!-- Map panel -->
+    <div>
+      <div id="sat-map"></div>
+      <p class="draw-hint">Draw a rectangle on the map to set the bounding box, or enter coordinates manually.</p>
+    </div>
+    <!-- Controls panel -->
+    <div>
+      <div style="font-size:0.8rem; color:#8b949e; margin-bottom:8px;">
+        Bounding Box — WGS-84 (min_lon, min_lat, max_lon, max_lat)
+      </div>
+      <div class="bbox-inputs">
+        <div class="bbox-field">
+          <label>West (min_lon)</label>
+          <input type="number" id="bbox-west"  step="0.0001" value="-0.4197">
+        </div>
+        <div class="bbox-field">
+          <label>East (max_lon)</label>
+          <input type="number" id="bbox-east"  step="0.0001" value="-0.3891">
+        </div>
+        <div class="bbox-field">
+          <label>South (min_lat)</label>
+          <input type="number" id="bbox-south" step="0.0001" value="39.4165">
+        </div>
+        <div class="bbox-field">
+          <label>North (max_lat)</label>
+          <input type="number" id="bbox-north" step="0.0001" value="39.4372">
+        </div>
+      </div>
 
-// Persistent state — survives WebSocket close events.
-// Only reset when the user explicitly starts a new run.
+      <div class="sat-date-row">
+        <label for="sat-date">Sentinel-1 Date</label>
+        <input type="date" id="sat-date" value="2024-10-30">
+      </div>
+
+      <button class="btn-sat" onclick="refreshSatellite()">🔄 Refresh Satellite Data</button>
+      <div id="sat-status"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Agent count sync ─────────────────────────────────────────────────────────
+function syncAgentInput(val) {
+  document.getElementById('agent-number').value = val;
+}
+function syncAgentSlider(val) {
+  const clamped = Math.min(5000, Math.max(1, parseInt(val) || 500));
+  document.getElementById('agent-slider').value = clamped;
+  document.getElementById('agent-number').value = clamped;
+}
+
+// ── Simulation ───────────────────────────────────────────────────────────────
+let ws = null;
 let simCompleted = false;
 
 function log(msg, cls = '') {
@@ -145,8 +283,10 @@ function log(msg, cls = '') {
 }
 
 function runSimulation() {
-  // ── Reset — only here, never in onclose ──────────────────────────────────
   simCompleted = false;
+
+  const agentCount = parseInt(document.getElementById('agent-number').value) || 500;
+  const wsUrl = `ws://localhost:8000/ws/run?scenario=paiporta&agents=${agentCount}`;
 
   document.getElementById('btn-run').disabled = true;
   document.getElementById('progress').style.width = '0%';
@@ -155,75 +295,82 @@ function runSimulation() {
   document.getElementById('card-telemetry').classList.remove('archived');
   document.getElementById('card-analysis').classList.remove('archived');
 
-  // Clear post-action fields so stale data from a prior run isn't visible
   ['evac-rate', 'stranded', 'clarity', 'diagnosis'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
 
-  // Hide SOP box without animation (it's a new run)
+  const broadcastBox = document.getElementById('broadcast-box');
+  broadcastBox.classList.remove('visible');
+  broadcastBox.style.display = 'none';
+
   const sopBox = document.getElementById('sop-box');
   sopBox.classList.remove('visible');
   sopBox.style.display = 'none';
 
   const dot   = document.getElementById('dot');
   const label = document.getElementById('status-label');
-  dot.className      = 'status-dot live';
-  label.style.color  = '';
-  label.textContent  = 'Executing Simulation...';
+  dot.className     = 'status-dot live';
+  label.style.color = '';
+  label.textContent = `Executing Simulation (${agentCount} agents)...`;
 
-  // ── WebSocket ─────────────────────────────────────────────────────────────
-  ws = new WebSocket(WS_URL);
+  ws = new WebSocket(wsUrl);
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
     if (msg.type === 'tick') {
       const d = msg.data;
-      document.getElementById('tick').textContent        = d.tick;
-      document.getElementById('safe').textContent        = d.n_safe;
-      document.getElementById('evacuating').textContent  = d.n_evacuating;
-      document.getElementById('informed').textContent    = d.n_informed;
+      document.getElementById('tick').textContent         = d.tick;
+      document.getElementById('safe').textContent         = d.n_safe;
+      document.getElementById('evacuating').textContent   = d.n_evacuating;
+      document.getElementById('informed').textContent     = d.n_informed;
       document.getElementById('preservation').textContent = (d.preservation_rate * 100).toFixed(1) + '%';
-      // Cap live progress at 90% so the final jump to 100% on complete is visible
-      document.getElementById('progress').style.width   = Math.min(d.tick / 10 * 100, 90) + '%';
-
+      document.getElementById('progress').style.width     = Math.min(d.tick / 10 * 100, 90) + '%';
       log(`Tick ${d.tick}: Fleet status updated. Evacuating: ${d.n_evacuating}`, 'tick');
     }
 
     else if (msg.type === 'complete') {
+      console.log('[ECHOSWARM] onmessage: type=complete received. simCompleted before set:', simCompleted);
       const p = msg.data;
-
-      // 1. Persist completion flag BEFORE anything else — onclose reads this.
       simCompleted = true;
+      console.log('[ECHOSWARM] onmessage: simCompleted set to true. Keys in payload:', Object.keys(p));
 
-      // 2. Immediate log feedback so the user sees activity
-      log('✔️ Simulation Cycle Complete. Archiving results...', 'ok');
-      log(`Detected ${p.map.bottleneck_roads.length} major bottlenecks.`, 'err');
+      try {
+        log('✔️ Simulation Cycle Complete. Archiving results...', 'ok');
+        log(`Detected ${p.map.bottleneck_roads.length} major bottlenecks.`, 'err');
+      } catch (e) {
+        console.error('[ECHOSWARM] onmessage: error reading p.map.bottleneck_roads:', e);
+      }
 
-      // 3. Initiate close — onclose fires async, typically within ~50ms
-      ws.close();
-
-      // 4. 500ms visual transition: gives the user's eyes time to shift from
-      //    "Live" mode to "Analysis" mode before the final numbers appear.
       setTimeout(() => {
-        document.getElementById('evac-rate').textContent  = (p.summary.evacuation_rate * 100).toFixed(1) + '%';
-        document.getElementById('stranded').textContent   = p.summary.stranded;
-        document.getElementById('clarity').textContent    = p.hermes.clarity.overall + '/10';
-        document.getElementById('diagnosis').textContent  = p.critic.diagnosis;
+        console.log('[ECHOSWARM] setTimeout fired. simCompleted:', simCompleted);
+        try {
+          document.getElementById('evac-rate').textContent  = (p.summary.evacuation_rate * 100).toFixed(1) + '%';
+          document.getElementById('stranded').textContent   = p.summary.stranded;
+          document.getElementById('clarity').textContent    = p.hermes.clarity.overall + '/10';
+          document.getElementById('diagnosis').textContent  = p.critic.diagnosis;
 
-        document.getElementById('progress').style.width = '100%';
-        document.getElementById('progress').classList.add('done');
+          document.getElementById('progress').style.width = '100%';
+          document.getElementById('progress').classList.add('done');
+          document.getElementById('card-telemetry').classList.add('archived');
+          document.getElementById('card-analysis').classList.add('archived');
 
-        document.getElementById('card-telemetry').classList.add('archived');
-        document.getElementById('card-analysis').classList.add('archived');
+          const broadcastText = p.hermes.message.human_readable || '(No broadcast generated)';
+          document.getElementById('broadcast-text').textContent = broadcastText;
+          broadcastBox.style.display = 'block';
+          requestAnimationFrame(() => broadcastBox.classList.add('visible'));
 
-        // Render Markdown SOP via marked.js
-        document.getElementById('sop-text').innerHTML = marked.parse(p.critic.sop_update || '');
-        // Trigger CSS transition: set display first, then add class on next frame
-        sopBox.style.display = 'block';
-        requestAnimationFrame(() => sopBox.classList.add('visible'));
+          document.getElementById('sop-text').innerHTML = marked.parse(p.critic.sop_update || '');
+          sopBox.style.display = 'block';
+          requestAnimationFrame(() => sopBox.classList.add('visible'));
 
-        log('📦 Final results locked. Data preserved until next launch.', 'info');
+          log('📦 Final results locked. Data preserved until next launch.', 'info');
+          document.getElementById('btn-run').disabled = false;
+          console.log('[ECHOSWARM] setTimeout: all DOM updates applied successfully.');
+        } catch (e) {
+          console.error('[ECHOSWARM] setTimeout: error applying DOM updates:', e);
+          document.getElementById('btn-run').disabled = false;
+        }
       }, 500);
     }
 
@@ -232,15 +379,16 @@ function runSimulation() {
     }
   };
 
-  // ── Smart close: blue "Archived" if completed, red if unexpected ──────────
   ws.onclose = () => {
-    document.getElementById('btn-run').disabled = false;
-
+    console.log('[ECHOSWARM] onclose fired. simCompleted:', simCompleted);
     if (simCompleted) {
+      console.log('[ECHOSWARM] onclose: taking SUCCESS path — preserving UI.');
       dot.className     = 'status-dot done';
       label.style.color = '#58a6ff';
       label.textContent = '📦 Simulation Archived';
     } else {
+      console.warn('[ECHOSWARM] onclose: taking ERROR path — simCompleted was false.');
+      document.getElementById('btn-run').disabled = false;
       dot.className     = 'status-dot error';
       label.style.color = '#f85149';
       label.textContent = 'Connection Closed';
@@ -248,11 +396,140 @@ function runSimulation() {
     }
   };
 
-  // onerror is always followed by onclose — button re-enable handled there
   ws.onerror = () => {
     log('CRITICAL ERROR: Could not establish WebSocket tunnel.', 'err');
   };
 }
+
+// ── Task 3: Leaflet map + satellite refresh ──────────────────────────────────
+let satMap = null;
+let drawnItems = null;
+let currentRectLayer = null;
+
+function initSatMap() {
+  // Paiporta centre
+  satMap = L.map('sat-map').setView([39.428, -0.4037], 13);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(satMap);
+
+  drawnItems = new L.FeatureGroup().addTo(satMap);
+
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polygon:   false,
+      polyline:  false,
+      circle:    false,
+      circlemarker: false,
+      marker:    false,
+      rectangle: { shapeOptions: { color: '#388bfd', weight: 2, fillOpacity: 0.1 } },
+    },
+    edit: { featureGroup: drawnItems },
+  });
+  satMap.addControl(drawControl);
+
+  // Draw the default bbox as a reference rectangle
+  drawDefaultBbox();
+
+  satMap.on(L.Draw.Event.CREATED, (e) => {
+    drawnItems.clearLayers();
+    drawnItems.addLayer(e.layer);
+    currentRectLayer = e.layer;
+    const b = e.layer.getBounds();
+    document.getElementById('bbox-west').value  = b.getWest().toFixed(4);
+    document.getElementById('bbox-east').value  = b.getEast().toFixed(4);
+    document.getElementById('bbox-south').value = b.getSouth().toFixed(4);
+    document.getElementById('bbox-north').value = b.getNorth().toFixed(4);
+  });
+
+  satMap.on(L.Draw.Event.EDITED, (e) => {
+    e.layers.eachLayer((layer) => {
+      const b = layer.getBounds();
+      document.getElementById('bbox-west').value  = b.getWest().toFixed(4);
+      document.getElementById('bbox-east').value  = b.getEast().toFixed(4);
+      document.getElementById('bbox-south').value = b.getSouth().toFixed(4);
+      document.getElementById('bbox-north').value = b.getNorth().toFixed(4);
+    });
+  });
+
+  satMap.on(L.Draw.Event.DELETED, () => {
+    currentRectLayer = null;
+    drawDefaultBbox();
+  });
+}
+
+function drawDefaultBbox() {
+  // Default bbox from config: west=-0.4197, south=39.4165, east=-0.3891, north=39.4372
+  const bounds = L.latLngBounds(
+    L.latLng(39.4165, -0.4197),
+    L.latLng(39.4372, -0.3891)
+  );
+  const rect = L.rectangle(bounds, { color: '#484f58', weight: 1, dashArray: '4', fillOpacity: 0.05 });
+  rect.addTo(satMap);
+}
+
+async function refreshSatellite() {
+  const west  = parseFloat(document.getElementById('bbox-west').value);
+  const east  = parseFloat(document.getElementById('bbox-east').value);
+  const south = parseFloat(document.getElementById('bbox-south').value);
+  const north = parseFloat(document.getElementById('bbox-north').value);
+  const date  = document.getElementById('sat-date').value;
+
+  if ([west, east, south, north].some(isNaN)) {
+    showSatStatus('error', '❌ Invalid bounding box coordinates.');
+    return;
+  }
+
+  const btn = document.querySelector('.btn-sat');
+  btn.disabled = true;
+  showSatStatus('', '⏳ Querying Copernicus CDSE...');
+
+  try {
+    const resp = await fetch('http://localhost:8000/satellite/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date,
+        flood_event_id: 'live_refresh',
+        threshold_db: -18.0,
+        bbox: [west, south, east, north],  // [min_lon, min_lat, max_lon, max_lat]
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const d = await resp.json();
+    const cls = d.status === 'live' ? 'live' : 'fallback';
+    showSatStatus(cls,
+      `${d.status === 'live' ? '🛰 LIVE' : '⚠ FALLBACK'} · Source: ${d.source} · ` +
+      `Polygons: ${d.polygons_detected} · Edges blocked: ${d.edges_blocked}`
+    );
+  } catch (err) {
+    showSatStatus('error', `❌ ${err.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showSatStatus(cls, text) {
+  const el = document.getElementById('sat-status');
+  el.className = cls;
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
+// Allow manual coordinate edits to clear the drawn layer so there's no mismatch
+['bbox-west','bbox-east','bbox-south','bbox-north'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    if (currentRectLayer) {
+      drawnItems.removeLayer(currentRectLayer);
+      currentRectLayer = null;
+    }
+  });
+});
+
+// Init map after DOM is ready
+window.addEventListener('load', initSatMap);
 </script>
 </body>
 </html>

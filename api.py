@@ -19,12 +19,41 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import random
 import sys
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
+
+
+class _SafeJSONEncoder(json.JSONEncoder):
+    """Handles numpy scalars/arrays and other non-native JSON types that can
+    appear in networkx/simulation results, so serialization errors surface as
+    clear log messages rather than silent WebSocket drops."""
+
+    def default(self, obj: object) -> object:
+        # numpy types — import guarded so numpy is optional
+        try:
+            import numpy as np  # noqa: PLC0415
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+        except ImportError:
+            pass
+        # Fallback for anything with a standard numeric coercion
+        if hasattr(obj, "__index__"):
+            return int(obj)
+        if hasattr(obj, "__float__"):
+            return float(obj)
+        return super().default(obj)
 
 # Ensure src/ is importable regardless of working directory
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -95,6 +124,8 @@ class SatelliteRefreshRequest(BaseModel):
     date: str = "2024-10-30"
     flood_event_id: str = "live_refresh"
     threshold_db: float = -18.0
+    # [min_lon, min_lat, max_lon, max_lat] WGS-84; falls back to config.VALENCIA_BBOX
+    bbox: list[float] | None = None
 
 
 # ── Core orchestration ─────────────────────────────────────────────────────────
@@ -109,6 +140,7 @@ def _load_scenario(name: str) -> dict:
 def run_orchestration(
     scenario_name: str,
     tick_callback: Callable[[dict | None], None] | None = None,
+    n_agents_override: int | None = None,
 ) -> dict:
     """
     Full pipeline: flood injection → Hermes → MiroFish → Critic → payload.
@@ -123,7 +155,7 @@ def run_orchestration(
     sector          = scenario["sector"]
     flood_event_id  = scenario["flood_event_id"]
     flood_data_path = scenario["flood_data_path"]
-    n_agents        = scenario["n_agents"]
+    n_agents        = n_agents_override if n_agents_override is not None else scenario["n_agents"]
 
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     try:
@@ -205,9 +237,17 @@ def list_scenarios() -> list[str]:
 
 
 @app.websocket("/ws/run")
-async def ws_run(websocket: WebSocket, scenario: str = "paiporta") -> None:
+async def ws_run(
+    websocket: WebSocket,
+    scenario: str = "paiporta",
+    agents: int | None = None,
+) -> None:
     """
     Stream simulation progress tick-by-tick, then send the final payload.
+
+    Query params:
+        scenario: scenario name (default "paiporta")
+        agents:   override n_agents from scenario JSON (1–10000)
 
     Message types sent to client:
         {"type": "tick",     "data": {tick, safe, evacuating, informed, waiting, ...}}
@@ -218,11 +258,14 @@ async def ws_run(websocket: WebSocket, scenario: str = "paiporta") -> None:
     loop  = asyncio.get_running_loop()
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
+    # Clamp agent count to a safe range
+    n_agents_override = max(1, min(10_000, agents)) if agents is not None else None
+
     def tick_cb(data: dict | None) -> None:
         asyncio.run_coroutine_threadsafe(queue.put(data), loop)
 
     future = asyncio.ensure_future(
-        loop.run_in_executor(None, run_orchestration, scenario, tick_cb)
+        loop.run_in_executor(None, run_orchestration, scenario, tick_cb, n_agents_override)
     )
 
     try:
@@ -233,14 +276,42 @@ async def ws_run(websocket: WebSocket, scenario: str = "paiporta") -> None:
             await websocket.send_json({"type": "tick", "data": item})
 
         payload = await future
-        await websocket.send_json({"type": "complete", "data": payload})
+
+        # Cap agents_final to 500 sampled entries — the full list is unused in
+        # the current frontend and grows large with high agent counts.
+        agents_final = payload.get("map", {}).get("agents_final", [])
+        if len(agents_final) > 500:
+            payload["map"]["agents_final"] = random.sample(agents_final, 500)
+
+        # Pre-serialize with a tolerant encoder so any type error surfaces as a
+        # clear terminal log rather than a silent WebSocket drop.
+        try:
+            raw = json.dumps({"type": "complete", "data": payload}, cls=_SafeJSONEncoder)
+        except Exception as serial_exc:
+            _log.error("Payload serialization failed: %r", serial_exc)
+            raise
+
+        await websocket.send_text(raw)
+        # Give the OS network buffer time to flush the full payload to the
+        # client before the close frame is sent.  Ruled-out once confirmed
+        # not the cause; harmless either way.
+        await asyncio.sleep(0.5)
 
     except Exception as exc:
+        _log.error("WebSocket run failed (%s): %r", type(exc).__name__, exc)
         if not future.done():
             future.cancel()
-        await websocket.send_json({"type": "error", "message": str(exc)})
+        # Guard the error send — if the connection is already broken this would
+        # otherwise raise a second uncaught exception and bury the original one.
+        try:
+            await websocket.send_json({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+        except Exception:
+            pass
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except (RuntimeError, Exception):
+            pass  # client already disconnected; nothing to close
 
 
 @app.post("/run", status_code=202)
@@ -312,9 +383,10 @@ async def satellite_refresh(body: SatelliteRefreshRequest) -> dict:
         driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
         try:
             source_label = "live"
+            effective_bbox = tuple(body.bbox) if body.bbox and len(body.bbox) == 4 else _cfg.VALENCIA_BBOX
             try:
                 polygons = get_flooded_sectors_live(
-                    bbox=_cfg.VALENCIA_BBOX,
+                    bbox=effective_bbox,
                     target_date=body.date,
                     client_id=_cfg.CDSE_CLIENT_ID,
                     client_secret=_cfg.CDSE_CLIENT_SECRET,
