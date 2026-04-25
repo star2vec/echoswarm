@@ -1,4 +1,4 @@
 ## SOP Update — Inadequate Verifiable Content
-- **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without requiring external confirmation.
-- **Rule:** Specify the shelter destination as a precise street intersection, including the nearest notable landmark, to minimize route ambiguity and facilitate efficient word-of-mouth transmission.
-- **Rule:** State the evacuation route using both street names and cardinal directions (e.g., "proceed north on Avinguda de la Independència") to enhance clarity and reduce degradation of instructions through multi-hop communication.
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Specify primary and alternative shelter locations as precise street intersections, including nearby landmarks, to reduce route ambiguity and facilitate word-of-mouth communication.
+- **Rule:** Provide a list of currently flooded or closed roads, in addition to open routes, to help agents navigate and make informed decisions during evacuation.

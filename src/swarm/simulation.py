@@ -92,7 +92,17 @@ def find_shelter_node(G: nx.DiGraph, driver: Driver) -> str:
         ]
 
     if not shelters:
-        raise ValueError("No Shelter nodes found in Neo4j; cannot set evacuation target")
+        # New-city graphs may have no OSM-tagged shelters. Fall back to the
+        # most-connected passable node — high degree ≈ central, reachable from
+        # most of the graph — so agents still have a valid evacuation target.
+        if not G.nodes():
+            raise ValueError("Graph has no nodes; cannot find shelter fallback")
+        best_node = max(G.nodes(), key=lambda n: G.degree(n))
+        logger.warning(
+            "No Shelter nodes in Neo4j — using highest-degree node {} as fallback target",
+            best_node,
+        )
+        return best_node
 
     shelter = shelters[0]
     best_node: str | None = None

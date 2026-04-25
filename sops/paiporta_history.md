@@ -187,3 +187,93 @@
 - **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without requiring external confirmation.
 - **Rule:** Specify the shelter destination as a precise street intersection, including the nearest notable landmark, to minimize route ambiguity and facilitate efficient word-of-mouth transmission.
 - **Rule:** State the evacuation route using both street names and cardinal directions (e.g., "proceed north on Avinguda de la Independència") to enhance clarity and reduce degradation of instructions through multi-hop communication.
+
+---
+
+**Run:** 69539995 · **2026-04-25T19:46:27Z** · Evac rate: 78.0%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without requiring a second source.
+- **Rule:** Specify the shelter destination as a precise street intersection (including street names and numbers) and provide an alternative route with similar detail to minimize degradation of route information through word-of-mouth hops.
+- **Rule:** State the source of the evacuation order explicitly (e.g., "Ordered by the Local Emergency Management Agency") to enhance the credibility and authority of the message for Skeptical agents.
+
+---
+
+**Run:** e5e24b2a · **2026-04-25T19:47:23Z** · Evac rate: 84.2%
+
+## SOP Update — Clarify Routes and Verify
+- **Rule:** State evacuation routes as a sequence of precise street intersections, including the starting point, to minimize degradation of details through word-of-mouth.
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and specific flood locations) to enable Skeptical agents to self-validate the threat without needing external confirmation.
+- **Rule:** Specify the shelter destination with its exact address and a unique landmark to ensure clarity and facilitate navigation for all agents, regardless of their level of skepticism.
+
+---
+
+**Run:** 8bb42355 · **2026-04-25T19:48:14Z** · Evac rate: 75.4%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without requiring external confirmation.
+- **Rule:** Specify evacuation routes with precise street intersections and notable landmarks, rather than relying solely on road names or building destinations, to minimize degradation of route details through word-of-mouth hops.
+- **Rule:** Cite the source of the evacuation order (e.g., local emergency management agency, EMS satellite provider) to enhance the credibility and authority of the message for Skeptical agents.
+
+---
+
+**Run:** a003603c · **2026-04-25T19:49:05Z** · Evac rate: 78.1%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate the evacuation order without requiring external confirmation.
+- **Rule:** Specify primary and alternative routes using precise street intersections and recognizable landmarks to minimize degradation of route details through word-of-mouth hops.
+- **Rule:** State the evacuation destination as a specific, easily identifiable location (including street address or nearby landmark) to ensure all agents, including Skeptical ones, can accurately navigate to the designated safe area without needing additional confirmation.
+
+---
+
+**Run:** f590aa8e · **2026-04-25T20:00:48Z** · Evac rate: 81.0%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two distinct, verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and weather warning) to enable Skeptical agents to self-validate the evacuation order without requiring external confirmation.
+- **Rule:** Specify shelter destinations as precise street intersections, including alternative options, to minimize route ambiguity and facilitate efficient evacuation.
+- **Rule:** Provide a clear, step-by-step evacuation route, avoiding flooded roads and bottleneck areas, to ensure agents can navigate safely and effectively.
+
+---
+
+**Run:** d96e959f · **2026-04-25T20:09:30Z** · Evac rate: 73.1%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and specific flood water level) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Provide a detailed evacuation route, including specific street intersections and landmarks, to minimize degradation of route information through word-of-mouth hops.
+- **Rule:** State the shelter destination as a precise street intersection (e.g., "proceed to the intersection of Carrer de Sant Josep and Avinguda de la Constitució, near Centre Cultural Recreatiu") to ensure clarity and consistency across all communication channels.
+
+---
+
+**Run:** 36a245a0 · **2026-04-25T20:13:43Z** · Evac rate: 28.0%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and weather alert) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Specify the evacuation route with precise street intersections and include a unique identifier for the destination shelter to minimize degradation of details through word-of-mouth hops.
+- **Rule:** State the source and timestamp of the evacuation order explicitly to enhance authority and credibility, allowing Skeptical agents to assess the message's reliability more effectively.
+
+---
+
+**Run:** cb624216 · **2026-04-25T20:17:02Z** · Evac rate: 27.1%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and specific flood depth or affected area) to enable Skeptical agents to self-validate without requiring a second source.
+- **Rule:** Specify the evacuation route with precise street intersections and notable landmarks to minimize degradation of route details through word-of-mouth hops.
+- **Rule:** State the shelter destination as a precise street intersection, including the building name (e.g., "Ellen Y. Moceri Community Center, located at 123 Main St and Oak Ave") to ensure clarity and consistency across all message hops.
+
+---
+
+**Run:** 0f1d8073 · **2026-04-25T20:18:16Z** · Evac rate: 26.8%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two distinct verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and weather alert) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Specify evacuation routes with precise street intersections and include a minimum of two alternative routes to reduce reliance on single paths and mitigate bottleneck effects.
+- **Rule:** State the source of the evacuation order explicitly (e.g., "Ordered by Emergency Management Agency") to enhance the credibility and authority of the message for Skeptical agents.
+
+---
+
+**Run:** df737c93 · **2026-04-25T21:31:18Z** · Evac rate: 28.4%
+
+## SOP Update — Inadequate Verifiable Content
+- **Rule:** Include at least two verifiable data points (e.g., satellite timestamp, confirmed road closure, authority name, and nearby landmark) to enable Skeptical agents to self-validate without needing external confirmation.
+- **Rule:** Specify primary and alternative shelter locations as precise street intersections, including nearby landmarks, to reduce route ambiguity and facilitate word-of-mouth communication.
+- **Rule:** Provide a list of currently flooded or closed roads, in addition to open routes, to help agents navigate and make informed decisions during evacuation.

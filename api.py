@@ -68,6 +68,7 @@ from shapely.geometry import MultiPolygon
 
 load_dotenv()
 
+from graph.loader import load_graph
 from graph.queries import (
     get_graph_context,
     get_node_coords,
@@ -128,6 +129,14 @@ class SatelliteRefreshRequest(BaseModel):
     bbox: list[float] | None = None
 
 
+class MapRefreshRequest(BaseModel):
+    # [min_lon, min_lat, max_lon, max_lat] WGS-84 — same convention as SatelliteRefreshRequest
+    bbox: list[float]
+    date: str = "2024-10-30"
+    flood_event_id: str = "dynamic_refresh"
+    threshold_db: float = -18.0
+
+
 # ── Core orchestration ─────────────────────────────────────────────────────────
 
 def _load_scenario(name: str) -> dict:
@@ -152,27 +161,16 @@ def run_orchestration(
     """
     scenario = _load_scenario(scenario_name)
 
-    sector          = scenario["sector"]
-    flood_event_id  = scenario["flood_event_id"]
-    flood_data_path = scenario["flood_data_path"]
-    n_agents        = n_agents_override if n_agents_override is not None else scenario["n_agents"]
+    sector   = scenario["sector"]
+    n_agents = n_agents_override if n_agents_override is not None else scenario["n_agents"]
 
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
     try:
-        # ── 1. Flood injection ─────────────────────────────────────────────────
-        polygons  = get_flooded_sectors(source="local", path=flood_data_path)
-        raw_union = unary_union(polygons)
-        if raw_union.geom_type not in ("Polygon", "MultiPolygon"):
-            flood_geom = MultiPolygon(
-                [g for g in raw_union.geoms if g.geom_type in ("Polygon", "MultiPolygon")]
-            )
-        else:
-            flood_geom = raw_union
+        # Flood state is managed externally: either by /api/refresh_map (dynamic bbox)
+        # or by a startup initialisation call. We trust what is already in Neo4j so that
+        # a prior /api/refresh_map call for a different city is not silently overwritten.
 
-        reset_flood(flood_event_id, driver)
-        inject_flood(flood_geom, flood_event_id, driver)
-
-        # ── 2. Hermes ──────────────────────────────────────────────────────────
+        # ── 1. Hermes ──────────────────────────────────────────────────────────
         ctx          = get_graph_context(sector, driver)
         hermes       = HermesEngine(sop_scenario=scenario_name)
         hermes_result = hermes.generate(ctx, sector=sector)
@@ -410,6 +408,140 @@ async def satellite_refresh(body: SatelliteRefreshRequest) -> dict:
                 "status":            source_label,
                 "source":            "sentinel-1-cdse" if source_label == "live" else "copernicus-ems-local",
                 "date":              body.date,
+                "polygons_detected": len(polygons),
+                "edges_blocked":     total_edges,
+            }
+        finally:
+            driver.close()
+
+    return await loop.run_in_executor(None, _run)
+
+
+@app.get("/api/topology")
+async def get_topology() -> dict:
+    """
+    Sample the current Neo4j graph and return a vis-network compatible payload.
+
+    Fetches edges first (LIMIT 700) — every node in the result is guaranteed to
+    have at least one edge, giving a connected subgraph.  The 700-edge limit
+    keeps the browser smooth while showing enough structure to reveal flood impact.
+
+    Returns:
+        {
+          "nodes": [{id, label, lat, lon, sector}],
+          "links": [{source, target, passable, road_name}],
+          "stats": {total_nodes, total_edges, flooded_edges}
+        }
+    """
+    loop = asyncio.get_running_loop()
+
+    def _run() -> dict:
+        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        try:
+            with driver.session() as session:
+                rows = list(session.run(
+                    "MATCH (a:Intersection)-[c:CONNECTS]->(b:Intersection) "
+                    "RETURN a.id AS a_id, a.lat AS a_lat, a.lon AS a_lon, a.sector AS a_sector, "
+                    "       b.id AS b_id, b.lat AS b_lat, b.lon AS b_lon, b.sector AS b_sector, "
+                    "       c.passable AS passable, c.road_name AS road_name "
+                    "LIMIT 4000"
+                ))
+
+            nodes_map: dict[str, dict] = {}
+            links: list[dict] = []
+
+            for row in rows:
+                for prefix in ("a", "b"):
+                    nid = row[f"{prefix}_id"]
+                    if nid not in nodes_map:
+                        nodes_map[nid] = {
+                            "id":     nid,
+                            "label":  nid[:6] if nid else "",
+                            "lat":    row[f"{prefix}_lat"],
+                            "lon":    row[f"{prefix}_lon"],
+                            "sector": row[f"{prefix}_sector"] or "",
+                        }
+                links.append({
+                    "source":    row["a_id"],
+                    "target":    row["b_id"],
+                    "passable":  bool(row["passable"]),
+                    "road_name": row["road_name"] or "",
+                })
+
+            flooded = sum(1 for l in links if not l["passable"])
+            return {
+                "nodes": list(nodes_map.values()),
+                "links": links,
+                "stats": {
+                    "total_nodes":   len(nodes_map),
+                    "total_edges":   len(links),
+                    "flooded_edges": flooded,
+                },
+            }
+        finally:
+            driver.close()
+
+    return await loop.run_in_executor(None, _run)
+
+
+@app.post("/api/refresh_map")
+async def refresh_map(body: MapRefreshRequest) -> dict:
+    """
+    Zero-to-hero map rebuild: fetch a fresh OSM road network for any bounding
+    box, then inject Sentinel-1 flood data (or local EMS fallback) on top.
+
+    Wipes the existing Neo4j graph before loading so old-city nodes don't
+    pollute routing for the new area.
+
+    bbox: [min_lon, min_lat, max_lon, max_lat] WGS-84
+    """
+    if len(body.bbox) != 4:
+        raise HTTPException(status_code=422, detail="bbox must be [min_lon, min_lat, max_lon, max_lat]")
+
+    loop = asyncio.get_running_loop()
+
+    def _run() -> dict:
+        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        try:
+            min_lon, min_lat, max_lon, max_lat = body.bbox
+
+            # Clear stale graph so old-city nodes don't bleed into new-area routing
+            with driver.session() as session:
+                session.run("MATCH (n) DETACH DELETE n")
+
+            # load_graph expects (lat_min, lon_min, lat_max, lon_max)
+            stats = load_graph((min_lat, min_lon, max_lat, max_lon), driver)
+
+            # Flood data — (min_lon, min_lat, max_lon, max_lat) convention
+            flood_bbox = (min_lon, min_lat, max_lon, max_lat)
+            source_label = "live"
+            try:
+                polygons = get_flooded_sectors_live(
+                    bbox=flood_bbox,
+                    target_date=body.date,
+                    client_id=_cfg.CDSE_CLIENT_ID,
+                    client_secret=_cfg.CDSE_CLIENT_SECRET,
+                    threshold_db=body.threshold_db,
+                )
+            except CDSEUnavailableError as exc:
+                _log.warning("CDSE unavailable (%s) — falling back to local EMS data", exc)
+                polygons = get_flooded_sectors(source="local")
+                source_label = "fallback"
+
+            reset_flood(body.flood_event_id, driver)
+            total_edges = 0
+            for polygon in polygons:
+                total_edges += inject_flood(polygon, body.flood_event_id, driver)
+
+            return {
+                "status":  source_label,
+                "source":  "sentinel-1-cdse" if source_label == "live" else "copernicus-ems-local",
+                "date":    body.date,
+                "graph": {
+                    "intersections": stats.n_intersections,
+                    "roads":         stats.n_roads,
+                    "edges":         stats.n_connects_edges,
+                },
                 "polygons_detected": len(polygons),
                 "edges_blocked":     total_edges,
             }
