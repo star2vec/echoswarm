@@ -301,3 +301,125 @@
 ## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
 - **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
 - **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.
+
+---
+
+**Run:** dc8a5be4 · **2026-04-26T07:53:00Z** · Evac rate: 16.0%
+
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.
+
+---
+
+**Run:** 842db6aa · **2026-04-26T07:56:18Z** · Evac rate: 22.2%
+
+## SOP Update — Emergency Fallback: Connectivity Issue During Analysis
+- **Rule:** Include a precise street-level shelter destination and named primary route so Skeptical agents can self-validate without a second source.
+- **Rule:** Cite a verifiable data point (satellite timestamp or confirmed road closure) in the first sentence to establish credibility before issuing instructions.
+
+---
+
+**Run:** 56af919a · **2026-04-26T07:56:47Z** · Evac rate: 22.4%
+
+## SOP Update — Skeptical Agents Starved of Self-Verifiable Anchors
+
+- **Rule:** Prepend every evacuation message with a single, independently verifiable anchor (e.g., "Official alert #[UUID], issued [HH:MM] by CECOPN, confirmed via SMS code [####]") so Skeptical agents can validate the source without needing peer confirmation.
+- **Rule:** Replace shelter names with GPS coordinates and street intersection (e.g., "Centre Cultural Recreatiu: Carrer Pelayo & Camí de la Pasqualeta, 39.4°N 0.41°W") to prevent degradation through word-of-mouth hops and ensure all agents converge on identical, unambiguous locations.
+- **Rule:** Specify exactly which numbered evacuation zone applies to recipient's street address in the message header, and name the single primary escape corridor (not multiple alternatives) to reduce decision paralysis and route fragmentation at bottleneck roads.
+
+---
+
+**Run:** 514fa738 · **2026-04-26T09:30:18Z** · Evac rate: 78.3%
+
+## SOP Update — Skeptical Agents Need Self-Contained Authority Anchors
+- **Rule:** Prepend evacuation messages with a single verified authority source (e.g., "Confederación de Valenciana confirms" or "Spanish National Protection agency directive") so Skeptical agents can validate the order without requiring neighbor confirmation.
+- **Rule:** Include one hardwired, non-negotiable data point per message (e.g., "Water level exceeded 1.8m at 14:32 UTC per AEMET gauge 04279") that persists through word-of-mouth hops and allows Skeptical agents to self-verify independently of route or shelter details.
+- **Rule:** Name shelter destinations by street intersection (e.g., "Carrer de la Reina María Cristina at Avenida del Poyo") rather than building name alone, so Skeptical agents can confirm location via map without needing a second source.
+
+---
+
+**Run:** e8514bfb · **2026-04-26T09:31:30Z** · Evac rate: 70.9%
+
+## SOP Update — Skeptical Agents Need Verifiable Authority & Self-Contained Routes
+- **Rule:** Lead with issuer identity and timestamp: "Paiporta Emergency Authority, [HH:MM UTC]. Evacuate NOW." So Skeptical agents can verify source credibility without asking neighbors.
+- **Rule:** Embed one actionable verification checkpoint per route: "Avinguda del Camí Nou confirmed passable as of [HH:MM]. If flooded, divert to [alternate route + reason]." Skeptical agents must be able to self-assess without a second neighbor source.
+- **Rule:** Replace generic shelter names with intersection + cardinal direction + distance: "Centre Cultural Recreatiu: Carrer de l'Església at Carrer Major, north side, 1.2 km." Eliminate ambiguity that fragments in multi-hop word-of-mouth.
+
+---
+
+**Run:** f993adfb · **2026-04-26T09:32:09Z** · Evac rate: 85.9%
+
+## SOP Update — Anchor Skeptics with Embedded Verifiability
+- **Rule:** Prepend every evacuation order with a real-time verifiable anchor (e.g., "Copernicus timestamp 14:32 UTC, 596 streets flooded, Paiporta Emergency Authority ID: [code]") so Skeptical agents can cross-check against one neighbor source instead of requiring two.
+- **Rule:** Replace building names with GPS coordinates or intersection + cardinal direction; state shelter as "Centre Cultural Recreatiu (39.450°N, −0.426°W, corner Carrer Església & Carrer Major)" to survive multi-hop degradation.
+- **Rule:** Explicitly name the authority issuing the order and include a single confirmable fact (satellite source, street count, timestamp) that a Skeptical agent's neighbor can independently validate within 2 minutes, reducing confirmation burden from 2 sources to 1.
+
+---
+
+**Run:** 23001a52 · **2026-04-26T09:36:36Z** · Evac rate: 28.0%
+
+## SOP Update — Skeptical Agents Lack Self-Verifiable Authority Anchors
+
+- **Rule:** Prepend the evacuation message with a named official authority (e.g., "Paiporta Emergency Authority Director [Name] confirms") and a single verifiable, time-stamped reference (satellite acquisition time, official alert ID, or confirmed road closure by name) so Skeptical agents can self-validate without requiring neighbor confirmation.
+
+- **Rule:** Replace shelter list with a single primary destination + street intersection (e.g., "Primary: Comstock School, Northwest 7th Avenue & 12th Street") and state explicitly which routes are **open** and which are **closed** (e.g., "Avoid Northwest 36th; use Northwest 12th only"). Eliminate ambiguity that degrades over word-of-mouth hops.
+
+- **Rule:** Add a second-source anchor: "This message is also posted on [official web/SMS service]" so Skeptical agents can confirm message integrity peer-to-peer without waiting for a third neighbor relay.
+
+---
+
+**Run:** 3c621d47 · **2026-04-26T09:38:45Z** · Evac rate: 5.0%
+
+## SOP Update — Skeptical Agents Lack Self-Contained Verification Anchors
+
+- **Rule:** Embed a specific, verifiable fact (e.g., "Paiporta Emergency Authority confirmed road closure at 11th & Main via GPS sensor at 14:32 UTC") so Skeptical agents can validate the message without requiring a second neighbor source.
+
+- **Rule:** Replace generic shelter names with precise street intersections (e.g., "Comstock School at 5th Avenue & Oak Street") and state the shortest confirmed open route by name (e.g., "use 9th Street westbound only") to prevent route degradation across word-of-mouth hops.
+
+- **Rule:** Prepend a single-sentence authority statement with the issuer's verifiable credential (e.g., "Paiporta Emergency Authority, registered under FEMA Region VI ID #TX-2024-001") so skeptical agents can confirm legitimacy without external lookup.
+
+---
+
+**Run:** 8b18c067 · **2026-04-26T09:39:45Z** · Evac rate: 8.5%
+
+## SOP Update — Skeptical Agents Starved of Self-Verifiable Anchors
+
+- **Rule:** Prepend a single verifiable, time-stamped anchor (e.g., "USGS flood gauge at [street intersection] reads [X feet] at [HH:MM UTC]") so Skeptical agents can validate the threat without requiring neighbor confirmation.
+
+- **Rule:** Replace "satellite-confirmed" aggregate statistics with one specific, checkable fact per sentence (e.g., "10th Street passable north of 16th; westbound blocked at 17th Avenue") to survive degradation through word-of-mouth hops without losing actionable detail.
+
+- **Rule:** Designate a single primary shelter with GPS coordinates and a recognizable landmark (e.g., "Comstock School, 42.34°N 97.51°W, northeast corner of Maple & 8th") instead of three options, to prevent route-splitting confusion and preserve token coherence in multi-hop relay.
+
+---
+
+**Run:** f5b21cc0 · **2026-04-26T09:40:41Z** · Evac rate: 12.5%
+
+## SOP Update — Skeptical Agents Blocked by Missing Authority Anchor
+- **Rule:** Prepend the message with a named official source and timestamp (e.g., "Miami-Dade Emergency Management, 14:32 UTC, declares mandatory evacuation") so Skeptical agents can independently verify the order's legitimacy without requiring peer confirmation.
+- **Rule:** Replace generic road closures ("streets 11–17") with a single, unambiguous verifiable fact (e.g., "FDOT confirms NW 17th Avenue flooded at NW 24th Street as of 14:15 UTC") that survives multi-hop word-of-mouth and requires no external lookup.
+- **Rule:** Limit route instructions to one primary corridor (e.g., "Travel north on Allapattah Avenue only") and remove secondary options; competing routes fragment Skeptical consensus and increase hesitation below the 60% token preservation threshold needed for cascading belief.
+
+---
+
+**Run:** c8ed838e · **2026-04-26T09:41:37Z** · Evac rate: 7.8%
+
+## SOP Update — Skeptical Agents Require Self-Contained Verification Anchors
+
+- **Rule:** Prepend every evacuation message with a verifiable authority timestamp and official contact (e.g., "Miami-Dade Emergency Management — issued 14:32 UTC, case #[ID]") so Skeptical agents can validate message authenticity without waiting for neighbor confirmation.
+
+- **Rule:** Replace vague threat descriptors ("Flooding has closed 328 other roads") with a single high-confidence, map-checkable anchor (e.g., "Real-time flood depth: 1.8m at Allapattah & 12th Ave per USGS gauge [station ID]") to enable Skeptical self-validation in <2 hops.
+
+- **Rule:** Specify shelter as GPS coordinates + street intersection (e.g., "Jackson Memorial Hospital, 1611 NW 12th Ave, 25.76°N 80.21°W") and include one backup shelter name + route; do not rely on "call for nearest shelter" in multi-hop word-of-mouth.
+
+---
+
+**Run:** 34c698d9 · **2026-04-26T09:42:37Z** · Evac rate: 18.9%
+
+## SOP Update — Skeptical Agents Blocked by Missing Self-Verification Anchors
+
+- **Rule:** Embed a single, easy-to-relay verification token (e.g., "NOAA Alert #FL-2024-1447") that Skeptical agents can repeat to neighbors or 311 to confirm the message is official without requiring a second independent source.
+
+- **Rule:** Lead with the *authority issuing the order* (e.g., "Miami-Dade Emergency Management declares mandatory evacuation") before naming shelter destinations, so word-of-mouth retains source credibility across hops.
+
+- **Rule:** Replace shelter names with GPS coordinates or cross-street pairs only (e.g., "12.0°N, 81.4°W" or "NW 12th Ave & NW 16th St"), and state "Do NOT verify shelter status by phone—evacuate first, contact 311 en route"—removing the conditional gate that blocked skeptics from acting.

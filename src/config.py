@@ -12,7 +12,7 @@ load_dotenv()
 
 # ── Anthropic ──────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY: str   = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL:   str   = "claude-3-5-haiku-latest"   # fast + capable for CERC JSON
+ANTHROPIC_MODEL:   str   = "claude-haiku-4-5-20251001"  # fast + capable for CERC JSON
 
 # ── Satellite / CDSE (Phase 2) ────────────────────────────────────────────────
 CDSE_CLIENT_ID:     str = os.getenv("CDSE_CLIENT_ID",     "")
