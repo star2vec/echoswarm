@@ -10,11 +10,11 @@ Built to be **globally deployable**, but battle-tested on the Valencia DANA floo
 
 https://github.com/user-attachments/assets/55f8ee68-a199-4d65-843a-56543356fa49
 
-<img width="937" height="754" alt="knowledge-graph_neo4j" src="https://github.com/user-attachments/assets/e706efbe-95ca-4c01-aa0d-6f5b33983bbf" />
-
 <img width="911" height="492" alt="learning-curve" src="https://github.com/user-attachments/assets/c152e3cb-c5be-4b37-96bc-c1152a5581a6" />
 
 https://github.com/user-attachments/assets/a108a84d-d776-447c-8c60-36b81df23fc9
+
+<img width="937" height="754" alt="knowledge-graph_neo4j" src="https://github.com/user-attachments/assets/e706efbe-95ca-4c01-aa0d-6f5b33983bbf" />
 
 https://github.com/user-attachments/assets/aeeec5c6-e1ba-4017-8a41-6b7cf024334e
 
